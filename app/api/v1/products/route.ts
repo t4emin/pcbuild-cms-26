@@ -13,7 +13,10 @@ export async function GET(request: Request) {
   const db = getD1();
   const order = sort === "price_asc" ? "price ASC" : sort === "price_desc" ? "price DESC" : "updated_at DESC";
   const result = await db.prepare(`SELECT * FROM products WHERE ${filters.join(" AND ")} ORDER BY ${order}`).bind(...bindings).all<Record<string, unknown>>();
-  const products = result.results.map(parseProduct);
+  const products = result.results.map((row) => {
+    const product = parseProduct(row);
+    return { ...product, images: product.images.map((src: string) => new URL(src, request.url).href) };
+  });
   return publicJson({ data: products, meta: { count: products.length } });
 }
 

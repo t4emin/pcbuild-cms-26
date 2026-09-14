@@ -7,7 +7,15 @@ const attributes = [
   ["attr_memory_type", "memory_type", "Memory support", "select", 1, null, 1],
   ["attr_cores", "cores", "Cores", "number", 0, null, 0],
   ["attr_threads", "threads", "Threads", "number", 0, null, 0],
+  ["attr_p_cores", "p_cores", "Performance cores", "number", 0, null, 0],
+  ["attr_e_cores", "e_cores", "Efficient cores", "number", 0, null, 0],
+  ["attr_base_clock", "base_clock_ghz", "P-core base clock", "number", 0, "GHz", 0],
+  ["attr_boost_clock", "boost_clock_ghz", "Max turbo frequency", "number", 0, "GHz", 0],
+  ["attr_cache", "cache_mb", "Intel Smart Cache", "number", 0, "MB", 0],
   ["attr_tdp_w", "tdp_w", "TDP", "number", 0, "W", 0],
+  ["attr_turbo_power", "max_turbo_power_w", "Maximum turbo power", "number", 0, "W", 0],
+  ["attr_integrated_graphics", "integrated_graphics", "Integrated graphics", "boolean", 0, null, 0],
+  ["attr_cooler_included", "cooler_included", "Cooler included", "boolean", 0, null, 0],
   ["attr_chipset", "chipset", "Chipset", "text", 0, null, 0],
   ["attr_form_factor", "form_factor", "Form factor", "select", 0, null, 1],
   ["attr_supported_mb", "supported_mainboard_form_factors", "Mainboard support", "select", 1, null, 1],
@@ -41,7 +49,7 @@ const options = [
 ] as const;
 
 const categoryMap: Record<string, Array<[string, boolean]>> = {
-  cpu: [["attr_socket", true], ["attr_memory_type", true], ["attr_cores", false], ["attr_threads", false], ["attr_tdp_w", false]],
+  cpu: [["attr_socket", true], ["attr_memory_type", true], ["attr_cores", false], ["attr_threads", false], ["attr_p_cores", false], ["attr_e_cores", false], ["attr_base_clock", false], ["attr_boost_clock", false], ["attr_cache", false], ["attr_tdp_w", false], ["attr_turbo_power", false], ["attr_integrated_graphics", false], ["attr_cooler_included", false]],
   motherboard: [["attr_socket", true], ["attr_memory_type", true], ["attr_chipset", false], ["attr_form_factor", true]],
   gpu: [["attr_vram_gb", false], ["attr_gpu_length", false], ["attr_psu_recommended", true], ["attr_tdp_w", false]],
   memory: [["attr_memory_type", true], ["attr_capacity", false]],
@@ -102,6 +110,35 @@ async function initialize() {
 }
 
 async function seedProducts(db: D1Database, now: string) {
+  await db.prepare("INSERT OR IGNORE INTO products (id, slug, category, brand, model, title, short_description, description, price, affiliate_url, shop_name, images, attributes, performance_score, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?)")
+    .bind(
+      "prod_intel_i5_14400f_next",
+      "intel-core-i5-14400f-next-a0157341",
+      "cpu",
+      "Intel",
+      "Core i5-14400F",
+      "INTEL CPU CORE I5-14400F LGA 1700 (NEXT) - A0157341",
+      "ซีพียูเดสก์ท็อป Intel Core เจนเนอเรชัน 14 แบบ 10 คอร์ 16 เธรด สูงสุด 4.7 GHz ไม่มีกราฟิกในตัว",
+      "Intel Core i5-14400F สำหรับเดสก์ท็อป ใช้สถาปัตยกรรมแบบ Hybrid ประกอบด้วย 6 Performance-cores และ 4 Efficient-cores รวม 10 คอร์ 16 เธรด ความถี่ P-core พื้นฐาน 2.5 GHz และเร่งสูงสุด 4.7 GHz มี Intel Smart Cache 20 MB รองรับหน่วยความจำ DDR5-4800 หรือ DDR4-3200 สูงสุด 192 GB ใช้ซ็อกเก็ต LGA1700 กำลังไฟพื้นฐาน 65W และกำลังไฟเทอร์โบสูงสุด 148W รุ่น F ไม่มีกราฟิกในตัว จึงจำเป็นต้องใช้การ์ดจอแยก สินค้าแบบกล่อง NEXT ระบุว่ามีชุดระบายความร้อนมาให้",
+      6730,
+      "https://s.shopee.co.th/9AOcemGiaB",
+      "Advice Official Shop",
+      JSON.stringify([
+        "/products/intel-core-i5-14400f-next/01.jpg",
+        "/products/intel-core-i5-14400f-next/02.jpg",
+        "/products/intel-core-i5-14400f-next/03.jpg",
+        "/products/intel-core-i5-14400f-next/04.jpg"
+      ]),
+      JSON.stringify({
+        socket: "lga1700", memory_type: ["ddr4", "ddr5"], cores: 10, threads: 16,
+        p_cores: 6, e_cores: 4, base_clock_ghz: 2.5, boost_clock_ghz: 4.7,
+        cache_mb: 20, tdp_w: 65, max_turbo_power_w: 148,
+        integrated_graphics: false, cooler_included: true
+      }),
+      84,
+      now,
+      now
+    ).run();
   const seeds = [
     ["prod_9800x3d", "amd-ryzen-7-9800x3d", "cpu", "AMD", "Ryzen 7 9800X3D", "AMD Ryzen 7 9800X3D", 18900, 96, { socket: "am5", memory_type: ["ddr5"], cores: 8, threads: 16, tdp_w: 120 }],
     ["prod_b650", "asus-prime-b650-plus-wifi", "motherboard", "ASUS", "Prime B650-Plus WiFi", "ASUS Prime B650-Plus WiFi", 7490, 87, { socket: "am5", memory_type: ["ddr5"], chipset: "B650", form_factor: "atx" }],
