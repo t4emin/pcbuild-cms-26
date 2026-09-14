@@ -82,17 +82,19 @@ async function initialize() {
   ]);
 
   const now = new Date().toISOString();
-  for (const [id, code, label, valueType, multiple, unit, compatibility] of attributes) {
-    await db.prepare("INSERT OR IGNORE INTO attribute_definitions (id, code, label, value_type, allow_multiple, unit, use_for_display, use_for_compatibility, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)").bind(id, code, label, valueType, multiple, unit, compatibility, now).run();
-  }
-  for (const [id, attributeId, value, label] of options) {
-    await db.prepare("INSERT OR IGNORE INTO attribute_options (id, attribute_id, value, label, sort_order) VALUES (?, ?, ?, ?, 0)").bind(id, attributeId, value, label).run();
-  }
+  await db.batch(attributes.map(([id, code, label, valueType, multiple, unit, compatibility]) =>
+    db.prepare("INSERT OR IGNORE INTO attribute_definitions (id, code, label, value_type, allow_multiple, unit, use_for_display, use_for_compatibility, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)").bind(id, code, label, valueType, multiple, unit, compatibility, now)
+  ));
+  await db.batch(options.map(([id, attributeId, value, label]) =>
+    db.prepare("INSERT OR IGNORE INTO attribute_options (id, attribute_id, value, label, sort_order) VALUES (?, ?, ?, ?, 0)").bind(id, attributeId, value, label)
+  ));
+  const categoryStatements: D1PreparedStatement[] = [];
   for (const [category, fields] of Object.entries(categoryMap)) {
     for (const [index, [attributeId, required]] of fields.entries()) {
-      await db.prepare("INSERT OR IGNORE INTO category_attributes (category, attribute_id, required, sort_order) VALUES (?, ?, ?, ?)").bind(category, attributeId, required ? 1 : 0, index).run();
+      categoryStatements.push(db.prepare("INSERT OR IGNORE INTO category_attributes (category, attribute_id, required, sort_order) VALUES (?, ?, ?, ?)").bind(category, attributeId, required ? 1 : 0, index));
     }
   }
+  await db.batch(categoryStatements);
 
   const rules = [
     ["rule_cpu_mb_socket", "cpu", "socket", "equals", "motherboard", "socket", "CPU socket ไม่ตรงกับ Mainboard"],
@@ -103,14 +105,15 @@ async function initialize() {
     ["rule_mb_case", "motherboard", "form_factor", "contained_in", "case", "supported_mainboard_form_factors", "Mainboard form factor ไม่รองรับโดย Case"],
     ["rule_cpu_cooler", "cpu", "socket", "contained_in", "cooler", "supported_sockets", "Cooler ไม่รองรับ CPU socket"],
   ];
-  for (const [id, leftCategory, leftCode, operator, rightCategory, rightCode, message] of rules) {
-    await db.prepare("INSERT OR IGNORE INTO compatibility_rules (id, left_category, left_attribute_code, operator, right_category, right_attribute_code, severity, message, active, created_at) VALUES (?, ?, ?, ?, ?, ?, 'error', ?, 1, ?)").bind(id, leftCategory, leftCode, operator, rightCategory, rightCode, message, now).run();
-  }
+  await db.batch(rules.map(([id, leftCategory, leftCode, operator, rightCategory, rightCode, message]) =>
+    db.prepare("INSERT OR IGNORE INTO compatibility_rules (id, left_category, left_attribute_code, operator, right_category, right_attribute_code, severity, message, active, created_at) VALUES (?, ?, ?, ?, ?, ?, 'error', ?, 1, ?)").bind(id, leftCategory, leftCode, operator, rightCategory, rightCode, message, now)
+  ));
   await seedProducts(db, now);
 }
 
 async function seedProducts(db: D1Database, now: string) {
-  await db.prepare("INSERT OR IGNORE INTO products (id, slug, category, brand, model, title, short_description, description, price, affiliate_url, shop_name, images, attributes, performance_score, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?)")
+  const statements: D1PreparedStatement[] = [];
+  statements.push(db.prepare("INSERT OR IGNORE INTO products (id, slug, category, brand, model, title, short_description, description, price, affiliate_url, shop_name, images, attributes, performance_score, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?)")
     .bind(
       "prod_intel_i5_14400f_next",
       "intel-core-i5-14400f-next-a0157341",
@@ -138,7 +141,7 @@ async function seedProducts(db: D1Database, now: string) {
       84,
       now,
       now
-    ).run();
+    ));
   const seeds = [
     ["prod_9800x3d", "amd-ryzen-7-9800x3d", "cpu", "AMD", "Ryzen 7 9800X3D", "AMD Ryzen 7 9800X3D", 18900, 96, { socket: "am5", memory_type: ["ddr5"], cores: 8, threads: 16, tdp_w: 120 }],
     ["prod_b650", "asus-prime-b650-plus-wifi", "motherboard", "ASUS", "Prime B650-Plus WiFi", "ASUS Prime B650-Plus WiFi", 7490, 87, { socket: "am5", memory_type: ["ddr5"], chipset: "B650", form_factor: "atx" }],
@@ -147,6 +150,7 @@ async function seedProducts(db: D1Database, now: string) {
     ["prod_psu", "corsair-rm750e", "psu", "Corsair", "RM750e 750W Gold", "Corsair RM750e 750W Gold", 3990, 90, { wattage: 750 }],
   ] as const;
   for (const [id, slug, category, brand, model, title, price, score, attrs] of seeds) {
-    await db.prepare("INSERT OR IGNORE INTO products (id, slug, category, brand, model, title, short_description, description, price, affiliate_url, shop_name, images, attributes, performance_score, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '[]', ?, ?, 'published', ?, ?)").bind(id, slug, category, brand, model, title, `${model} — mock product for API integration.`, "ข้อมูลตัวอย่างสำหรับทดสอบ API และ Compatibility Engine", price, JSON.stringify(attrs), score, now, now).run();
+    statements.push(db.prepare("INSERT OR IGNORE INTO products (id, slug, category, brand, model, title, short_description, description, price, affiliate_url, shop_name, images, attributes, performance_score, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '[]', ?, ?, 'published', ?, ?)").bind(id, slug, category, brand, model, title, `${model} — mock product for API integration.`, "ข้อมูลตัวอย่างสำหรับทดสอบ API และ Compatibility Engine", price, JSON.stringify(attrs), score, now, now));
   }
+  await db.batch(statements);
 }
