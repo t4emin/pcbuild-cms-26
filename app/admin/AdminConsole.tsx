@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- admin previews include private R2 URLs */
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 type Product = {
   id:string; slug:string; category:string; brand:string; model:string; title:string;
@@ -12,6 +12,11 @@ type Def={id:string;code:string;label:string;value_type:string;allow_multiple:nu
 type Opt={id:string;attribute_id:string;value:string;label:string};
 type MapRow={category:string;attribute_id:string;sort_order:number};
 const categories=["cpu","motherboard","gpu","memory","storage","psu","case","cooler"];
+const categoryOptions=categories.map(value=>({value,label:value.toUpperCase()}));
+const statusOptions=[
+  {value:"draft",label:"ฉบับร่าง"},
+  {value:"published",label:"เผยแพร่"}
+];
 const blank:Product={
   id:"",slug:"",category:"cpu",brand:"",model:"",title:"",shortDescription:"",
   description:"",price:0,affiliateUrl:"",shopName:"",images:[],attributes:{},
@@ -123,10 +128,10 @@ function Editor({product:initial,defs,opts,maps,close,save}:{
     <div className="drawer-head"><div><span className="eyebrow">{p.id?"EDIT PRODUCT":"NEW PRODUCT"}</span>
       <h2>{p.title||"เพิ่มสินค้าใหม่"}</h2></div><button className="close" onClick={close}>×</button></div>
     <div className="form-body"><h3>ข้อมูลหลัก</h3><div className="grid">
-      <Field label="หมวดหมู่"><select value={p.category} onChange={e=>set("category",e.target.value)}>
-        {categories.map(c=><option key={c}>{c}</option>)}</select></Field>
-      <Field label="สถานะ"><select value={p.status} onChange={e=>set("status",e.target.value)}>
-        <option value="draft">ฉบับร่าง</option><option value="published">เผยแพร่</option></select></Field>
+      <Field label="หมวดหมู่"><CustomSelect value={p.category} options={categoryOptions}
+        onChange={value=>set("category",value)}/></Field>
+      <Field label="สถานะ"><CustomSelect value={p.status} options={statusOptions}
+        onChange={value=>set("status",value)}/></Field>
       <Field label="แบรนด์"><input value={p.brand} onChange={e=>set("brand",e.target.value)}/></Field>
       <Field label="รุ่น"><input value={p.model} onChange={e=>set("model",e.target.value)}/></Field>
       <Field wide label="ชื่อสินค้า"><input value={p.title} onChange={e=>set("title",e.target.value)}/></Field>
@@ -156,14 +161,115 @@ function Editor({product:initial,defs,opts,maps,close,save}:{
 }
 
 function Attribute({def,options,value,change}:{def:Def;options:Opt[];value:unknown;change:(v:unknown)=>void}){
-  if(def.value_type==="select")return <select multiple={!!def.allow_multiple}
-    value={(def.allow_multiple?(Array.isArray(value)?value:[]):String(value??"")) as string|string[]}
-    onChange={e=>change(def.allow_multiple?Array.from(e.currentTarget.selectedOptions,o=>o.value):e.target.value)}>
-    <option value="">— เลือก —</option>{options.map(o=><option key={o.id} value={o.value}>{o.label}</option>)}
-  </select>;
+  if(def.value_type==="select")return <CustomSelect multiple={!!def.allow_multiple}
+    value={def.allow_multiple?(Array.isArray(value)?value.map(String):[]):String(value??"")}
+    options={options.map(o=>({value:o.value,label:o.label}))} onChange={change}/>;
+  if(def.value_type==="boolean")return <CustomSelect value={String(value??"")}
+    options={[{value:"true",label:"รองรับ"},{value:"false",label:"ไม่รองรับ"}]}
+    onChange={selected=>change(selected==="true")}/>;
   return <input type={def.value_type==="number"?"number":"text"} value={String(value??"")}
     onChange={e=>change(def.value_type==="number"?+e.target.value:e.target.value)}/>
 }
+
+function CustomSelect({value,options,onChange,multiple=false,placeholder="เลือกข้อมูล"}:{
+  value:string|string[];
+  options:{value:string;label:string}[];
+  onChange:(value:string|string[])=>void;
+  multiple?:boolean;
+  placeholder?:string
+}){
+  const [open,setOpen]=useState(false);
+  const rootRef=useRef<HTMLDivElement>(null);
+  const menuRef=useRef<HTMLDivElement>(null);
+  const triggerRef=useRef<HTMLButtonElement>(null);
+  const listboxId=useId();
+  const selected=multiple
+    ? (Array.isArray(value)?value:[])
+    : [Array.isArray(value)?"":value];
+  const selectedLabels=options
+    .filter(option=>selected.includes(option.value))
+    .map(option=>option.label);
+
+  useEffect(()=>{
+    function dismiss(event:PointerEvent){
+      if(!rootRef.current?.contains(event.target as Node))setOpen(false);
+    }
+    function escape(event:KeyboardEvent){
+      if(event.key==="Escape")setOpen(false);
+    }
+    document.addEventListener("pointerdown",dismiss);
+    document.addEventListener("keydown",escape);
+    return()=>{
+      document.removeEventListener("pointerdown",dismiss);
+      document.removeEventListener("keydown",escape);
+    };
+  },[]);
+
+  function focusOption(index:number){
+    const items=Array.from(
+      menuRef.current?.querySelectorAll<HTMLButtonElement>("button")||[]
+    );
+    items[(index+items.length)%items.length]?.focus();
+  }
+  function toggle(next:string){
+    if(multiple){
+      onChange(selected.includes(next)
+        ? selected.filter(item=>item!==next)
+        : [...selected,next]);
+      return;
+    }
+    onChange(next);
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  const summary=selectedLabels.length
+    ? multiple
+      ? selectedLabels.slice(0,2).join(", ")+
+        (selectedLabels.length>2?` +${selectedLabels.length-2}`:"")
+      : selectedLabels[0]
+    : placeholder;
+
+  return <div className={`custom-select${open?" open":""}`} ref={rootRef}>
+    <button ref={triggerRef} type="button" className="custom-select-trigger"
+      aria-haspopup="listbox" aria-expanded={open} aria-controls={listboxId}
+      onClick={()=>setOpen(current=>!current)}
+      onKeyDown={event=>{
+        if(event.key==="ArrowDown"){
+          event.preventDefault();
+          setOpen(true);
+          requestAnimationFrame(()=>focusOption(Math.max(
+            0,options.findIndex(option=>selected.includes(option.value))
+          )));
+        }
+      }}>
+      <span className={selectedLabels.length?"":"placeholder"}>{summary}</span>
+      {multiple&&selectedLabels.length>0&&<small>{selectedLabels.length}</small>}
+      <i aria-hidden="true"/>
+    </button>
+    {open&&<div ref={menuRef} id={listboxId}
+      className="custom-select-menu" role="listbox"
+      aria-multiselectable={multiple||undefined}>
+      {options.map((option,index)=>{
+        const active=selected.includes(option.value);
+        return <button key={option.value} type="button" role="option"
+          aria-selected={active} className={active?"selected":""}
+          onClick={()=>toggle(option.value)}
+          onKeyDown={event=>{
+            if(event.key==="ArrowDown"||event.key==="ArrowUp"){
+              event.preventDefault();
+              focusOption(index+(event.key==="ArrowDown"?1:-1));
+            }
+            if(event.key==="Escape")triggerRef.current?.focus();
+          }}>
+          <span>{option.label}</span>
+          <i aria-hidden="true">{active?"✓":""}</i>
+        </button>
+      })}
+    </div>}
+  </div>
+}
+
 function Field({label,wide,children}:{label:string;wide?:boolean;children:React.ReactNode}){
   return <label className={wide?"field wide":"field"}><span>{label}</span>{children}</label>
 }
