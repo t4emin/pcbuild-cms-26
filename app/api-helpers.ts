@@ -1,4 +1,6 @@
 import { ensureDb, getD1 } from "../db/runtime";
+import { normalizeAffiliateUrl } from "./url-utils";
+export { normalizeAffiliateUrl } from "./url-utils";
 
 export const categories = ["cpu", "motherboard", "gpu", "memory", "storage", "psu", "case", "cooler"] as const;
 
@@ -45,7 +47,14 @@ export function validateProduct(input: ProductInput) {
   if (!input.model?.trim()) errors.push("model is required");
   if (!categories.includes(input.category as typeof categories[number])) errors.push("invalid category");
   if (!Number.isFinite(Number(input.price)) || Number(input.price) < 0) errors.push("price must be a positive number");
-  if (input.affiliateUrl && !/^https:\/\//.test(input.affiliateUrl)) errors.push("affiliateUrl must use https");
+  const affiliateUrl = normalizeAffiliateUrl(input.affiliateUrl);
+  if (affiliateUrl) {
+    try {
+      if (new URL(affiliateUrl).protocol !== "https:") errors.push("affiliateUrl must use https");
+    } catch {
+      errors.push("affiliateUrl must be a valid URL");
+    }
+  }
   return errors;
 }
 

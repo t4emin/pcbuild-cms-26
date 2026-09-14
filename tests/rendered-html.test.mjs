@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { access,readFile } from "node:fs/promises";
 import test from "node:test";
+import { normalizeAffiliateUrl } from "../app/url-utils.ts";
 
 test("ships the BuildFit landing page and admin console",async()=>{
   const [page,admin,layout]=await Promise.all([
@@ -28,4 +29,10 @@ test("ships public and protected API routes",async()=>{
   const compatibility=await readFile(new URL(routes[2],import.meta.url),"utf8");
   assert.match(compatibility,/score/);
   assert.match(compatibility,/contained_in/);
+});
+
+test("normalizes pasted affiliate URLs",()=>{
+  assert.equal(normalizeAffiliateUrl("  https://s.shopee.co.th/9AOcemGiaB  "),"https://s.shopee.co.th/9AOcemGiaB");
+  assert.equal(normalizeAffiliateUrl("[Shopee](https://s.shopee.co.th/9AOcemGiaB)"),"https://s.shopee.co.th/9AOcemGiaB");
+  assert.equal(normalizeAffiliateUrl("s.shopee.co.th/9AOcemGiaB"),"https://s.shopee.co.th/9AOcemGiaB");
 });
