@@ -48,4 +48,35 @@ npm run dev
 
 Schema อยู่ที่ `db/schema.ts` และ migration อยู่ใน `drizzle/` ข้อมูล mock จะถูก seed อัตโนมัติใน environment ใหม่
 
-Admin บน production ใช้ Sign in with ChatGPT ของ Sites ส่วน public API อ่านได้โดยไม่ต้องล็อกอิน
+Admin บน production ใช้ระบบ login ของ CMS เอง ส่วน public API อ่านได้โดยไม่ต้องล็อกอิน
+
+## Cloudflare Git Deploy
+
+โปรเจ็กต์นี้ใช้ Cloudflare Workers runtime, D1 และ R2 จึงเหมาะกับ Cloudflare มากกว่า Vercel แบบตรง ๆ
+
+ตั้งค่าใน Cloudflare app:
+
+```bash
+Build command: npm run build
+Deploy command: cd dist/server && npx wrangler deploy --config wrangler.json
+```
+
+Environment variables ที่ต้องตั้งใน Cloudflare:
+
+```text
+NODE_VERSION=22.13.0
+BOOTSTRAP_ADMIN_PASSWORD=<owner password>
+CLOUDFLARE_D1_DATABASE_ID=<D1 database id>
+CLOUDFLARE_D1_DATABASE_NAME=pcbuild-cms-db
+CLOUDFLARE_R2_BUCKET_NAME=pcbuild-product-images
+```
+
+Binding names ที่โค้ดใช้:
+
+```text
+DB -> D1 database
+PRODUCT_IMAGES -> R2 bucket
+```
+
+`npm run build` จะสร้าง `dist/server/wrangler.json` แล้ว `scripts/patch-cloudflare-deploy.mjs`
+จะ patch D1/R2 ในไฟล์นั้นจาก environment variables ด้านบนก่อน deploy
