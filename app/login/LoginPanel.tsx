@@ -6,12 +6,15 @@ export default function LoginPanel(){
   const [username,setUsername]=useState("");
   const [password,setPassword]=useState("");
   const [confirmPassword,setConfirmPassword]=useState("");
+  const [showPassword,setShowPassword]=useState(false);
+  const [showConfirmPassword,setShowConfirmPassword]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const [registrationComplete,setRegistrationComplete]=useState(false);
 
   function switchMode(next:"login"|"register"){
     setMode(next);setError("");setPassword("");setConfirmPassword("");
+    setShowPassword(false);setShowConfirmPassword(false);
   }
   async function submit(event:FormEvent){
     event.preventDefault();setError("");
@@ -45,14 +48,26 @@ export default function LoginPanel(){
         <label><input aria-label="Username" autoFocus autoComplete="username"
           value={username} onChange={event=>setUsername(event.target.value.toLowerCase())}
           placeholder="Username" required/></label>
-        <label><input aria-label="Password" type="password"
+        <div className="password-field"><input aria-label="Password"
+          type={showPassword?"text":"password"}
           autoComplete={mode==="login"?"current-password":"new-password"}
           value={password} onChange={event=>setPassword(event.target.value)}
-          placeholder="Password" required/></label>
-        {mode==="register"&&<label><input aria-label="Confirm password" type="password"
+          placeholder="Password" required/>
+          <button type="button" aria-label={showPassword?"ซ่อนรหัสผ่าน":"แสดงรหัสผ่าน"}
+            aria-pressed={showPassword} onClick={()=>setShowPassword(value=>!value)}>
+            {showPassword?"ซ่อน":"แสดง"}
+          </button>
+        </div>
+        {mode==="register"&&<div className="password-field"><input aria-label="Confirm password"
+          type={showConfirmPassword?"text":"password"}
           autoComplete="new-password" value={confirmPassword}
           onChange={event=>setConfirmPassword(event.target.value)}
-          placeholder="Confirm password" required/></label>}
+          placeholder="Confirm password" required/>
+          <button type="button" aria-label={showConfirmPassword?"ซ่อนรหัสผ่านยืนยัน":"แสดงรหัสผ่านยืนยัน"}
+            aria-pressed={showConfirmPassword} onClick={()=>setShowConfirmPassword(value=>!value)}>
+            {showConfirmPassword?"ซ่อน":"แสดง"}
+          </button>
+        </div>}
         {error&&<div className="auth-message error">{error}</div>}
         <button className="primary auth-submit" disabled={busy}>
           {busy?"กรุณารอสักครู่...":mode==="login"?"เข้าสู่ระบบ":"ส่งคำขอใช้งาน"}

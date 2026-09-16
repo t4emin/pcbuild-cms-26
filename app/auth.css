@@ -75,6 +75,15 @@
 .simple-login .login-card-head small{margin-top:4px;color:#93988f;font-size:7px;letter-spacing:.17em}
 .simple-login .login-card h2{margin:26px 0 0;text-align:center;font-size:25px}
 .simple-login .auth-switch{margin-top:22px}
+.password-field{position:relative}
+.password-field input{padding-right:64px}
+.password-field button{
+  position:absolute;top:50%;right:7px;transform:translateY(-50%);padding:7px 9px;
+  color:#63705f;background:#eef1e9;border:0;border-radius:7px;
+  font-size:9px;font-weight:800
+}
+.password-field button:hover{color:var(--ink);background:#e3e8dc}
+.password-field button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
 .signup-success-modal{
   width:min(360px,100%);padding:34px;align-items:center;text-align:center
 }
