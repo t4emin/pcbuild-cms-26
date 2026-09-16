@@ -1,4 +1,4 @@
-export const PASSWORD_ITERATIONS=600_000;
+export const PASSWORD_ITERATIONS=100_000;
 export const PASSWORD_MIN_LENGTH=10;
 
 const encoder=new TextEncoder();
