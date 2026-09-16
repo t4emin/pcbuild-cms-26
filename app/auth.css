@@ -75,6 +75,15 @@
 .simple-login .login-card-head small{margin-top:4px;color:#93988f;font-size:7px;letter-spacing:.17em}
 .simple-login .login-card h2{margin:26px 0 0;text-align:center;font-size:25px}
 .simple-login .auth-switch{margin-top:22px}
+.signup-success-modal{
+  width:min(360px,100%);padding:34px;align-items:center;text-align:center
+}
+.signup-success-icon{
+  width:52px;height:52px;display:grid;place-items:center;color:white;
+  background:var(--green);border-radius:50%;font-size:24px;font-weight:900
+}
+.signup-success-modal h2{margin:17px 0 24px;font-size:24px}
+.signup-success-modal .primary{width:100%}
 
 @media(max-width:900px){
   .login-page{grid-template-columns:1fr}
@@ -84,6 +93,8 @@
 }
 @media(max-width:580px){
   .simple-login .login-card{padding:28px 22px}
+  .signup-success-backdrop{place-items:center}
+  .signup-success-modal{padding:30px 24px;border-radius:17px}
   .users-list article{grid-template-columns:38px 1fr}
   .user-state,.user-actions{grid-column:2}
   .users-summary>div{align-items:flex-start;flex-direction:column}

@@ -26,6 +26,9 @@ test("ships the BuildFit landing page and admin console",async()=>{
   assert.match(admin,/ออกจากระบบ/);
   assert.doesNotMatch(admin,/ลบไม่ได้/);
   assert.match(login,/สมัครบัญชี/);
+  assert.match(login,/สมัครสำเร็จ/);
+  assert.match(login,/placeholder="Confirm password"/);
+  assert.doesNotMatch(login,/manatdev/);
   assert.match(login,/BuildFit/);
   assert.doesNotMatch(login,/พื้นที่จัดการข้อมูล/);
 });
