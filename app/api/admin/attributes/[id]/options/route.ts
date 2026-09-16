@@ -1,5 +1,5 @@
 import { ensureDb, getD1 } from "../../../../../../db/runtime";
-import { requireAdminRequest } from "../../../../../api-helpers";
+import { auditRequest, requireAdminRequest } from "../../../../../api-helpers";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await requireAdminRequest(request))) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -14,5 +14,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to create option" }, { status: 409 });
   }
+  await auditRequest(request,"create","attribute_option",id,input.label.trim());
   return Response.json({ data: { id, attributeId, value, label: input.label.trim() } }, { status: 201 });
 }

@@ -1,5 +1,5 @@
 import { ensureDb, getD1 } from "../../../../db/runtime";
-import { categories, requireAdminRequest } from "../../../api-helpers";
+import { auditRequest, categories, requireAdminRequest } from "../../../api-helpers";
 
 export async function GET(request: Request) {
   if (!(await requireAdminRequest(request))) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -30,5 +30,6 @@ export async function POST(request: Request) {
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to create attribute" }, { status: 409 });
   }
+  await auditRequest(request,"create","attribute",id,input.label.trim());
   return Response.json({ data: { id, code } }, { status: 201 });
 }

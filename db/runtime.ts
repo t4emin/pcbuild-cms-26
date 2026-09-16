@@ -90,12 +90,14 @@ async function initialize() {
     db.prepare("CREATE TABLE IF NOT EXISTS category_attributes (category TEXT NOT NULL, attribute_id TEXT NOT NULL, required INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(category, attribute_id), FOREIGN KEY(attribute_id) REFERENCES attribute_definitions(id) ON DELETE CASCADE)"),
     db.prepare("CREATE TABLE IF NOT EXISTS compatibility_rules (id TEXT PRIMARY KEY, left_category TEXT NOT NULL, left_attribute_code TEXT NOT NULL, operator TEXT NOT NULL, right_category TEXT NOT NULL, right_attribute_code TEXT NOT NULL, severity TEXT NOT NULL DEFAULT 'error', message TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL)"),
     db.prepare("CREATE TABLE IF NOT EXISTS image_objects (key TEXT PRIMARY KEY, filename TEXT NOT NULL, content_type TEXT NOT NULL, size INTEGER NOT NULL, created_at TEXT NOT NULL)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS audit_logs (id TEXT PRIMARY KEY, actor TEXT NOT NULL, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)"),
     db.prepare("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, password_iterations INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, approved_at TEXT, approved_by TEXT, last_login_at TEXT)"),
     db.prepare("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)"),
     db.prepare("CREATE TABLE IF NOT EXISTS login_attempts (username TEXT PRIMARY KEY, failures INTEGER NOT NULL DEFAULT 0, window_started_at TEXT NOT NULL, locked_until TEXT)"),
     db.prepare("CREATE INDEX IF NOT EXISTS products_category_status_idx ON products(category, status)"),
     db.prepare("CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS audit_logs_created_idx ON audit_logs(created_at)"),
   ]);
 
   const now = new Date().toISOString();

@@ -64,6 +64,13 @@ export async function requireAdminRequest(request: Request) {
   return Boolean(await getSessionUser(request));
 }
 
+export async function auditRequest(request:Request,action:string,targetType:string,targetId:string,summary=""){
+  const user=await getSessionUser(request);
+  await ensureDb();
+  await getD1().prepare("INSERT INTO audit_logs (id, actor, action, target_type, target_id, summary, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .bind(crypto.randomUUID(),user?.username||"system",action,targetType,targetId,summary,new Date().toISOString()).run();
+}
+
 export async function requireOwnerRequest(request:Request){
   if(request.method!=="GET"&&!isSameOrigin(request))return false;
   return isOwner(await getSessionUser(request));

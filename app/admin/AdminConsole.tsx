@@ -9,9 +9,19 @@ type Product = {
   shopName:string; images:string[]; attributes:Record<string,unknown>;
   performanceScore:number; status:string;
 };
-type Def={id:string;code:string;label:string;value_type:string;allow_multiple:number;unit?:string};
+type Def={
+  id:string;code:string;label:string;value_type:string;allow_multiple:number;
+  unit?:string;use_for_compatibility?:number;
+};
 type Opt={id:string;attribute_id:string;value:string;label:string};
 type MapRow={category:string;attribute_id:string;sort_order:number};
+type Rule={
+  id:string;left_category:string;left_attribute_code:string;operator:string;
+  right_category:string;right_attribute_code:string;severity:string;message:string;active:number;
+};
+type AuditRow={
+  id:string;actor:string;action:string;target_type:string;target_id:string;summary:string;created_at:string;
+};
 const categories=["cpu","motherboard","gpu","memory","storage","psu","case","cooler"];
 const categoryOptions=categories.map(value=>({value,label:value.toUpperCase()}));
 const statusOptions=[
@@ -62,19 +72,22 @@ export default function AdminConsole({currentUser}:{currentUser:CmsUser}){
   const [defs,setDefs]=useState<Def[]>([]);
   const [opts,setOpts]=useState<Opt[]>([]);
   const [maps,setMaps]=useState<MapRow[]>([]);
-  const [rules,setRules]=useState<Record<string,string>[]>([]);
+  const [rules,setRules]=useState<Rule[]>([]);
+  const [audits,setAudits]=useState<AuditRow[]>([]);
   const [editing,setEditing]=useState<Product|null>(null);
   const [accountOpen,setAccountOpen]=useState(false);
   const [query,setQuery]=useState("");
   const load=useCallback(async()=>{
-    const [p,a,r]=await Promise.all([
+    const [p,a,r,log]=await Promise.all([
       cmsFetch("/api/admin/products").then(x=>x.json()),
       cmsFetch("/api/admin/attributes").then(x=>x.json()),
-      cmsFetch("/api/admin/rules").then(x=>x.json())
+      cmsFetch("/api/admin/rules").then(x=>x.json()),
+      cmsFetch("/api/admin/audit").then(x=>x.json())
     ]);
     setProducts(p.data||[]); setDefs(a.data?.definitions||[]);
     setOpts(a.data?.options||[]); setMaps(a.data?.categoryAttributes||[]);
     setRules(r.data||[]);
+    setAudits(log.data||[]);
   },[]);
   useEffect(()=>{const timer=setTimeout(()=>void load(),0);return()=>clearTimeout(timer)},[load]);
   async function save(p:Product){
@@ -89,12 +102,13 @@ export default function AdminConsole({currentUser}:{currentUser:CmsUser}){
   const list=products.filter(p=>(p.title+p.brand+p.model).toLowerCase().includes(query.toLowerCase()));
   const labels:Record<string,string>={
     products:"คลังสินค้า",attributes:"ชนิดข้อมูล",rules:"Compatibility engine",
-    users:"ผู้ใช้งาน",api:"Public API"
+    users:"ผู้ใช้งาน",audit:"Activity log",api:"Public API"
   };
   const navigation=[
     ["products","◫","สินค้า"],["attributes","⌘","คุณสมบัติ"],
     ["rules","⇄","กฎความเข้ากัน"],
     ...(currentUser.isOwner?[["users","◎","ผู้ใช้งาน"]]:[]),
+    ["audit","≡","Activity"],
     ["api","{}","API"]
   ];
   return <div className="admin-shell">
@@ -137,13 +151,11 @@ export default function AdminConsole({currentUser}:{currentUser:CmsUser}){
         </div>)}</div>
       </section>}
       {tab==="attributes"&&<Attributes defs={defs} opts={opts} maps={maps} reload={load}/>}
-      {tab==="rules"&&<section><div className="section-bar"><p>กฎที่ใช้คำนวณคะแนนความเข้ากันได้</p></div>
-        <div className="rules-list">{rules.map(r=><article key={r.id}>
-          <span>{r.severity}</span><div><b>{r.left_category}.{r.left_attribute_code} {r.operator} {r.right_category}.{r.right_attribute_code}</b>
-          <p>{r.message}</p></div></article>)}</div></section>}
+      {tab==="rules"&&<Rules rules={rules} defs={defs} maps={maps} reload={load}/>}
       {tab==="users"&&currentUser.isOwner&&<UserManager currentUser={currentUser}/>}
+      {tab==="audit"&&<AuditLog rows={audits}/>}
       {tab==="api"&&<section className="api-docs"><p>เปิด CORS พร้อมให้ frontend เรียกใช้</p>
-        {["GET /api/v1/products?category=cpu&sort=price_asc","GET /api/v1/products/:slug",
+        {["GET /api/v1/products?category=cpu&attr_socket=lga1700&page=1&limit=24","GET /api/v1/products/:slug",
           "GET /api/v1/schema","POST /api/v1/compatibility/check","GET /api/v1/images/:key"].map(x=>
           <div key={x}><code>{x}</code></div>)}
       </section>}
@@ -160,11 +172,56 @@ function Editor({product:initial,defs,opts,maps,close,save}:{
 }){
   useBodyScrollLock();
   const [p,setP]=useState(initial),[busy,setBusy]=useState(false);
+  const [errors,setErrors]=useState<string[]>([]);
+  const [importText,setImportText]=useState("");
   const fileRef=useRef<HTMLInputElement>(null);
   const active=useMemo(()=>maps.filter(m=>m.category===p.category)
     .sort((a,b)=>a.sort_order-b.sort_order).map(m=>defs.find(d=>d.id===m.attribute_id))
     .filter(Boolean) as Def[],[p.category,defs,maps]);
   const set=(key:keyof Product,value:unknown)=>setP(old=>({...old,[key]:value}));
+  function importDetails(){
+    const lines=importText.split("\n").map(line=>line.trim()).filter(Boolean);
+    if(!lines.length)return;
+    const next={...p};
+    const description:string[]=[];
+    for(const line of lines){
+      const [rawKey,...rest]=line.split(":");
+      const value=rest.join(":").trim();
+      const key=rawKey.trim().toLowerCase();
+      if(!value){description.push(line);continue}
+      if(["name","title","ชื่อ","ชื่อสินค้า"].includes(key))next.title=value;
+      else if(["brand","แบรนด์"].includes(key))next.brand=value;
+      else if(["model","รุ่น"].includes(key))next.model=value;
+      else if(["price","ราคา"].includes(key))next.price=Number(value.replace(/[^0-9.]/g,""))||next.price;
+      else if(["shop","shopname","ร้าน"].includes(key))next.shopName=value;
+      else if(["link","affiliate","affiliateurl","url"].includes(key))next.affiliateUrl=value;
+      else description.push(line);
+    }
+    if(description.length)next.description=[next.description,description.join("\n")].filter(Boolean).join("\n\n");
+    setP(next);setImportText("");
+  }
+  function validateLocal(){
+    const next:string[]=[];
+    if(!p.title.trim())next.push("ใส่ชื่อสินค้า");
+    if(!p.brand.trim())next.push("ใส่แบรนด์");
+    if(!p.model.trim())next.push("ใส่รุ่น");
+    if(Number(p.price)<0||!Number.isFinite(Number(p.price)))next.push("ราคาต้องเป็นตัวเลข 0 ขึ้นไป");
+    if(p.affiliateUrl.trim()){
+      try{
+        const url=new URL(p.affiliateUrl.trim().replace(/^hhttps:\/\//i,"https://"));
+        if(url.protocol!=="https:")next.push("Affiliate URL ต้องเป็น https");
+      }catch{next.push("Affiliate URL ไม่ถูกต้อง")}
+    }
+    setErrors(next);
+    return next.length===0;
+  }
+  function moveImage(from:number,to:number){
+    if(to<0||to>=p.images.length)return;
+    const images=[...p.images];
+    const [picked]=images.splice(from,1);
+    images.splice(to,0,picked);
+    set("images",images);
+  }
   async function upload(files:FileList){
     setBusy(true);
     try{for(const file of Array.from(files)){
@@ -196,16 +253,26 @@ function Editor({product:initial,defs,opts,maps,close,save}:{
       onDrop={e=>{e.preventDefault();void upload(e.dataTransfer.files)}}>
       <input ref={fileRef} hidden type="file" multiple accept="image/*" onChange={e=>e.target.files&&void upload(e.target.files)}/>
       <b>{busy?"กำลังอัปโหลด...":"วางรูปที่นี่ หรือคลิกเพื่อเลือก"}</b><small>JPG, PNG, WebP · สูงสุด 8 MB</small>
-    </div><div className="image-list">{p.images.map((src,i)=><div key={src}>
-      <img src={src} alt=""/><button onClick={()=>set("images",p.images.filter((_,n)=>n!==i))}>×</button>
+    </div><div className="quick-import">
+      <textarea rows={4} value={importText} onChange={e=>setImportText(e.target.value)}
+        placeholder={"วางข้อมูลสินค้าแบบเร็ว เช่น\nName: INTEL CPU...\nBrand: Intel\nPrice: 4190\nLink: https://..."}/>
+      <button className="secondary" type="button" onClick={importDetails}>ดึงเข้าฟอร์ม</button>
+    </div><div className="image-list">{p.images.map((src,i)=><div key={`${src}-${i}`} className={i===0?"cover":""}>
+      <img src={src} alt=""/><small>{i===0?"Cover":`#${i+1}`}</small>
+      <div className="image-actions">
+        <button type="button" onClick={()=>moveImage(i,0)}>ปก</button>
+        <button type="button" onClick={()=>moveImage(i,i-1)}>‹</button>
+        <button type="button" onClick={()=>moveImage(i,i+1)}>›</button>
+        <button type="button" onClick={()=>set("images",p.images.filter((_,n)=>n!==i))}>×</button>
+      </div>
     </div>)}</div><h3>คุณสมบัติสำหรับ {p.category}</h3><div className="grid">
       {active.map(d=><Field key={d.id} label={d.label+(d.unit?` (${d.unit})`:"")}>
         <Attribute def={d} options={opts.filter(o=>o.attribute_id===d.id)}
           value={p.attributes[d.code]} change={v=>set("attributes",{...p.attributes,[d.code]:v})}/>
       </Field>)}
-    </div></div><div className="drawer-foot"><button className="secondary" onClick={close}>ยกเลิก</button>
-      <button className="primary" disabled={busy} onClick={async()=>{setBusy(true);try{await save(p)}
-        catch(e){alert(e instanceof Error?e.message:"ผิดพลาด");setBusy(false)}}}>บันทึกสินค้า</button>
+    </div>{errors.length>0&&<div className="form-errors">{errors.map(error=><span key={error}>{error}</span>)}</div>}</div><div className="drawer-foot"><button className="secondary" onClick={close}>ยกเลิก</button>
+      <button className="primary" disabled={busy} onClick={async()=>{if(!validateLocal())return;setBusy(true);try{await save(p)}
+        catch(e){setErrors([e instanceof Error?e.message:"ผิดพลาด"]);setBusy(false)}}}>บันทึกสินค้า</button>
     </div>
   </div></div>
 }
@@ -467,22 +534,139 @@ function formatUserDate(value:string){
   return new Intl.DateTimeFormat("th-TH",{dateStyle:"medium"}).format(new Date(value));
 }
 
-type AttributeDialogState={kind:"definition"}|{kind:"option";definition:Def};
+function AuditLog({rows}:{rows:AuditRow[]}){
+  return <section><div className="section-bar"><p>ประวัติ action ล่าสุดใน CMS</p></div>
+    <div className="audit-list">{rows.map(row=><article key={row.id}>
+      <span>{row.action}</span><div><b>{row.target_type} · {row.summary||row.target_id}</b>
+        <p>{row.actor} · {formatUserDate(row.created_at)}</p></div>
+    </article>)}</div>
+  </section>
+}
+
+function Rules({rules,defs,maps,reload}:{
+  rules:Rule[];defs:Def[];maps:MapRow[];reload:()=>Promise<void>
+}){
+  const [dialog,setDialog]=useState<Rule|null|false>(false);
+  async function remove(rule:Rule){
+    if(!confirm("ลบกฎนี้?"))return;
+    await cmsFetch(`/api/admin/rules/${rule.id}`,{method:"DELETE"});
+    await reload();
+  }
+  return <section><div className="section-bar"><p>กฎที่ใช้คำนวณคะแนนความเข้ากันได้</p>
+    <button className="primary" onClick={()=>setDialog(null)}>+ เพิ่มกฎ</button></div>
+    <div className="rules-list">{rules.map(r=><article key={r.id}
+      className={Number(r.active)===0?"inactive":""}>
+      <span>{r.severity}</span><div><b>{r.left_category}.{r.left_attribute_code} {r.operator} {r.right_category}.{r.right_attribute_code}</b>
+      <p>{r.message}</p></div><div className="rule-actions">
+        <button onClick={()=>setDialog(r)}>แก้ไข</button>
+        <button onClick={()=>void remove(r)}>ลบ</button>
+      </div></article>)}</div>
+    {dialog!==false&&<RuleDialog rule={dialog} defs={defs} maps={maps}
+      close={()=>setDialog(false)} saved={reload}/>}
+  </section>
+}
+
+function RuleDialog({rule,defs,maps,close,saved}:{
+  rule:Rule|null;defs:Def[];maps:MapRow[];close:()=>void;saved:()=>Promise<void>
+}){
+  useBodyScrollLock();
+  const [leftCategory,setLeftCategory]=useState(rule?.left_category??"cpu");
+  const [rightCategory,setRightCategory]=useState(rule?.right_category??"motherboard");
+  const [leftAttribute,setLeftAttribute]=useState(rule?.left_attribute_code??"");
+  const [rightAttribute,setRightAttribute]=useState(rule?.right_attribute_code??"");
+  const [operator,setOperator]=useState(rule?.operator??"overlaps");
+  const [severity,setSeverity]=useState(rule?.severity??"error");
+  const [message,setMessage]=useState(rule?.message??"");
+  const [active,setActive]=useState(rule?Number(rule.active)!==0:true);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  const attributeOptions=(category:string)=>maps.filter(map=>map.category===category)
+    .sort((a,b)=>a.sort_order-b.sort_order)
+    .map(map=>defs.find(def=>def.id===map.attribute_id))
+    .filter(Boolean)
+    .map(def=>({value:(def as Def).code,label:(def as Def).label}));
+  async function submit(event:React.FormEvent){
+    event.preventDefault();setError("");setBusy(true);
+    try{
+      const response=await cmsFetch(rule?`/api/admin/rules/${rule.id}`:"/api/admin/rules",{
+        method:rule?"PATCH":"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({leftCategory,leftAttribute,operator,rightCategory,rightAttribute,severity,message,active})
+      });
+      const body=await response.json();
+      if(!response.ok)throw Error(body.error||"บันทึกกฎไม่สำเร็จ");
+      await saved();close();
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:"บันทึกกฎไม่สำเร็จ");
+    }finally{setBusy(false)}
+  }
+  return <div className="admin-modal-backdrop" onMouseDown={event=>{
+    if(event.target===event.currentTarget&&!busy)close();
+  }}>
+    <form className="admin-modal rule-modal" role="dialog" aria-modal="true"
+      aria-labelledby="rule-dialog-title" onSubmit={submit}>
+      <header className="admin-modal-head"><div><span className="eyebrow">COMPATIBILITY RULE</span>
+        <h2 id="rule-dialog-title">{rule?"แก้ไขกฎ":"เพิ่มกฎใหม่"}</h2>
+        <p>เลือก attribute สองฝั่งเพื่อให้ frontend ใช้กรองและประเมินคะแนนสเปก</p>
+      </div><button type="button" className="admin-modal-close" disabled={busy}
+        onClick={close}>×</button></header>
+      <div className="admin-modal-body">
+        <div className="modal-grid">
+          <Field label="หมวดฝั่งซ้าย"><CustomSelect value={leftCategory}
+            options={categoryOptions} onChange={value=>{setLeftCategory(String(value));setLeftAttribute("")}}/></Field>
+          <Field label="Attribute ฝั่งซ้าย"><CustomSelect value={leftAttribute}
+            options={attributeOptions(leftCategory)} onChange={value=>setLeftAttribute(String(value))}/></Field>
+          <Field label="เงื่อนไข"><CustomSelect value={operator}
+            options={[
+              {value:"equals",label:"ต้องเท่ากัน"},
+              {value:"overlaps",label:"มีค่าซ้ำกัน"},
+              {value:"lte",label:"ฝั่งซ้ายน้อยกว่าหรือเท่ากับ"}
+            ]} onChange={value=>setOperator(String(value))}/></Field>
+          <Field label="ระดับผลกระทบ"><CustomSelect value={severity}
+            options={[{value:"error",label:"Error"},{value:"warning",label:"Warning"}]}
+            onChange={value=>setSeverity(String(value))}/></Field>
+          <Field label="หมวดฝั่งขวา"><CustomSelect value={rightCategory}
+            options={categoryOptions} onChange={value=>{setRightCategory(String(value));setRightAttribute("")}}/></Field>
+          <Field label="Attribute ฝั่งขวา"><CustomSelect value={rightAttribute}
+            options={attributeOptions(rightCategory)} onChange={value=>setRightAttribute(String(value))}/></Field>
+          <Field wide label="ข้อความแจ้งเตือน"><input value={message}
+            onChange={event=>setMessage(event.target.value)}
+            placeholder="เช่น CPU socket ไม่ตรงกับเมนบอร์ด"/></Field>
+        </div>
+        <div className="modal-settings"><label><span><strong>เปิดใช้งานกฎนี้</strong>
+          <small>ปิดไว้ได้ถ้ายังไม่อยากให้ frontend นำไปคิดคะแนน</small></span>
+          <input type="checkbox" checked={active} onChange={event=>setActive(event.target.checked)}/><i/></label></div>
+        {error&&<p className="modal-error">{error}</p>}
+      </div>
+      <footer className="admin-modal-foot"><button className="secondary" type="button"
+        disabled={busy} onClick={close}>ยกเลิก</button><button className="primary"
+        disabled={busy||!leftAttribute||!rightAttribute||!message.trim()}>
+        {busy?"กำลังบันทึก...":"บันทึกกฎ"}</button></footer>
+    </form>
+  </div>
+}
+
+type AttributeDialogState=
+  |{kind:"definition";definition?:Def}
+  |{kind:"option";definition:Def;option?:Opt};
 
 function AttributeDialog({state,close,saved}:{
-  state:AttributeDialogState;close:()=>void;saved:()=>Promise<void>
+  state:AttributeDialogState;close:()=>void;saved:()=>Promise<void>;maps:MapRow[]
 }){
   useBodyScrollLock();
   const isDefinition=state.kind==="definition";
-  const [label,setLabel]=useState("");
-  const [code,setCode]=useState("");
-  const [valueType,setValueType]=useState("select");
-  const [unit,setUnit]=useState("");
-  const [selectedCategories,setSelectedCategories]=useState<string[]>([]);
-  const [allowMultiple,setAllowMultiple]=useState(false);
-  const [compatibility,setCompatibility]=useState(false);
-  const [optionValue,setOptionValue]=useState("");
-  const [optionLabel,setOptionLabel]=useState("");
+  const editingDefinition=isDefinition?state.definition:undefined;
+  const editingOption=state.kind==="option"?state.option:undefined;
+  const [label,setLabel]=useState(editingDefinition?.label??"");
+  const [code,setCode]=useState(editingDefinition?.code??"");
+  const [valueType,setValueType]=useState(editingDefinition?.value_type??"select");
+  const [unit,setUnit]=useState(editingDefinition?.unit??"");
+  const [selectedCategories,setSelectedCategories]=useState<string[]>(
+    editingDefinition?maps.filter(m=>m.attribute_id===editingDefinition.id).map(m=>m.category):[]
+  );
+  const [allowMultiple,setAllowMultiple]=useState(Boolean(editingDefinition?.allow_multiple));
+  const [compatibility,setCompatibility]=useState(Boolean(editingDefinition?.use_for_compatibility));
+  const [optionValue,setOptionValue]=useState(editingOption?.value??"");
+  const [optionLabel,setOptionLabel]=useState(editingOption?.label??"");
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
 
@@ -495,13 +679,17 @@ function AttributeDialog({state,close,saved}:{
     event.preventDefault();setError("");setBusy(true);
     try{
       const endpoint=isDefinition
-        ? "/api/admin/attributes"
-        : `/api/admin/attributes/${state.definition.id}/options`;
+        ? editingDefinition?`/api/admin/attributes/${editingDefinition.id}`:"/api/admin/attributes"
+        : editingOption?`/api/admin/attributes/${state.definition.id}/options/${editingOption.id}`
+          : `/api/admin/attributes/${state.definition.id}/options`;
+      const method=isDefinition
+        ? editingDefinition?"PATCH":"POST"
+        : editingOption?"PATCH":"POST";
       const payload=isDefinition
         ? {label,code,valueType,unit,allowMultiple,useForCompatibility:compatibility,
           categories:selectedCategories}
         : {value:optionValue,label:optionLabel||optionValue};
-      const response=await cmsFetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},
+      const response=await cmsFetch(endpoint,{method,headers:{"content-type":"application/json"},
         body:JSON.stringify(payload)});
       const body=await response.json();
       if(!response.ok)throw Error(body.error||"บันทึกไม่สำเร็จ");
@@ -520,10 +708,12 @@ function AttributeDialog({state,close,saved}:{
     <form className="admin-modal" role="dialog" aria-modal="true"
       aria-labelledby="attribute-dialog-title" onSubmit={submit}>
       <header className="admin-modal-head"><div>
-        <span className="eyebrow">{isDefinition?"NEW ATTRIBUTE":"NEW OPTION"}</span>
+        <span className="eyebrow">{isDefinition
+          ? editingDefinition?"EDIT ATTRIBUTE":"NEW ATTRIBUTE"
+          : editingOption?"EDIT OPTION":"NEW OPTION"}</span>
         <h2 id="attribute-dialog-title">{isDefinition
-          ? "เพิ่มชนิดข้อมูล"
-          : `เพิ่มตัวเลือก · ${state.definition.label}`}</h2>
+          ? editingDefinition?"แก้ไขชนิดข้อมูล":"เพิ่มชนิดข้อมูล"
+          : `${editingOption?"แก้ไข":"เพิ่ม"}ตัวเลือก · ${state.definition.label}`}</h2>
         <p>{isDefinition
           ? "กำหนดข้อมูลหนึ่งครั้ง แล้วนำไปใช้กับสินค้าและระบบตรวจความเข้ากันได้"
           : "Value ใช้เก็บใน API ส่วนชื่อแสดงผลใช้ในหน้า Admin และหน้าร้าน"}</p>
@@ -586,15 +776,30 @@ function AttributeDialog({state,close,saved}:{
 
 function Attributes({defs,opts,maps,reload}:{defs:Def[];opts:Opt[];maps:MapRow[];reload:()=>Promise<void>}){
   const [dialog,setDialog]=useState<AttributeDialogState|null>(null);
+  async function removeDefinition(def:Def){
+    if(!confirm(`ลบคุณสมบัติ ${def.label}?`))return;
+    await cmsFetch(`/api/admin/attributes/${def.id}`,{method:"DELETE"});
+    await reload();
+  }
+  async function removeOption(def:Def,opt:Opt){
+    if(!confirm(`ลบตัวเลือก ${opt.label}?`))return;
+    await cmsFetch(`/api/admin/attributes/${def.id}/options/${opt.id}`,{method:"DELETE"});
+    await reload();
+  }
   return <section><div className="section-bar"><p>ใช้ข้อมูลชุดเดียวทั้งการแสดงผลและแมปการรองรับ</p>
     <button className="primary" onClick={()=>setDialog({kind:"definition"})}>+ เพิ่มคุณสมบัติ</button></div>
     <div className="card-grid">{defs.map(d=><article className="attribute-card" key={d.id}>
-      <span className="type">{d.value_type}</span><h3>{d.label}</h3><code>{d.code}</code>
+      <div className="attribute-card-head"><span className="type">{d.value_type}</span>
+        <span><button onClick={()=>setDialog({kind:"definition",definition:d})}>แก้ไข</button>
+        <button onClick={()=>void removeDefinition(d)}>ลบ</button></span></div>
+      <h3>{d.label}</h3><code>{d.code}</code>
       <p>{maps.filter(m=>m.attribute_id===d.id).map(m=>m.category).join(" · ")}</p>
       {d.value_type==="select"&&<div className="chips">{opts.filter(o=>o.attribute_id===d.id)
-        .map(o=><span key={o.id}>{o.label}</span>)}<button
+        .map(o=><span key={o.id} className="chip-option">{o.label}
+          <button onClick={()=>setDialog({kind:"option",definition:d,option:o})}>แก้</button>
+          <button onClick={()=>void removeOption(d,o)}>×</button></span>)}<button
           onClick={()=>setDialog({kind:"option",definition:d})}>+ เพิ่มตัวเลือก</button></div>}
     </article>)}</div>
-    {dialog&&<AttributeDialog state={dialog} close={()=>setDialog(null)} saved={reload}/>}
+    {dialog&&<AttributeDialog state={dialog} close={()=>setDialog(null)} saved={reload} maps={maps}/>}
   </section>
 }

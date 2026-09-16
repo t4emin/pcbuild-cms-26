@@ -1,5 +1,5 @@
 import { ensureDb, getD1 } from "../../../../db/runtime";
-import { getProductRows, normalizeAffiliateUrl, parseProduct, requireAdminRequest, slugify, validateProduct, type ProductInput } from "../../../api-helpers";
+import { auditRequest, getProductRows, normalizeAffiliateUrl, parseProduct, requireAdminRequest, slugify, validateProduct, type ProductInput } from "../../../api-helpers";
 
 export async function GET(request: Request) {
   if (!(await requireAdminRequest(request))) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -22,6 +22,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Unable to create product" }, { status: 409 });
   }
+  await auditRequest(request,"create","product",id,input.title?.trim()||slug);
   const row = await db.prepare("SELECT * FROM products WHERE id = ?").bind(id).first<Record<string, unknown>>();
   return Response.json({ data: row ? parseProduct(row) : null }, { status: 201 });
 }
