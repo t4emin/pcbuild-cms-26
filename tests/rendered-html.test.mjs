@@ -18,6 +18,8 @@ test("ships the BuildFit landing page and admin console",async()=>{
   assert.match(admin,/Code สำหรับ API/);
   assert.match(admin,/ใช้กับหมวดสินค้า/);
   assert.doesNotMatch(admin,/\bprompt\s*\(/);
+  assert.match(admin,/body\.style\.overflow="hidden"/);
+  assert.match(admin,/body\.style\.position="fixed"/);
 });
 
 test("ships public and protected API routes",async()=>{

@@ -292,6 +292,35 @@ function AttributeDialog({state,close,saved}:{
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
 
+  useEffect(()=>{
+    const body=document.body;
+    const scrollY=window.scrollY;
+    const scrollbarWidth=window.innerWidth-document.documentElement.clientWidth;
+    const previous={
+      overflow:body.style.overflow,
+      position:body.style.position,
+      top:body.style.top,
+      width:body.style.width,
+      paddingRight:body.style.paddingRight
+    };
+    body.style.overflow="hidden";
+    body.style.position="fixed";
+    body.style.top=`-${scrollY}px`;
+    body.style.width="100%";
+    if(scrollbarWidth>0){
+      const paddingRight=Number.parseFloat(getComputedStyle(body).paddingRight)||0;
+      body.style.paddingRight=`${paddingRight+scrollbarWidth}px`;
+    }
+    return()=>{
+      body.style.overflow=previous.overflow;
+      body.style.position=previous.position;
+      body.style.top=previous.top;
+      body.style.width=previous.width;
+      body.style.paddingRight=previous.paddingRight;
+      window.scrollTo(0,scrollY);
+    };
+  },[]);
+
   function toggleCategory(category:string){
     setSelectedCategories(current=>current.includes(category)
       ? current.filter(item=>item!==category)
