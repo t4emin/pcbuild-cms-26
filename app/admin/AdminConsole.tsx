@@ -273,22 +273,134 @@ function CustomSelect({value,options,onChange,multiple=false,placeholder="เล
 function Field({label,wide,children}:{label:string;wide?:boolean;children:React.ReactNode}){
   return <label className={wide?"field wide":"field"}><span>{label}</span>{children}</label>
 }
+
+type AttributeDialogState={kind:"definition"}|{kind:"option";definition:Def};
+
+function AttributeDialog({state,close,saved}:{
+  state:AttributeDialogState;close:()=>void;saved:()=>Promise<void>
+}){
+  const isDefinition=state.kind==="definition";
+  const [label,setLabel]=useState("");
+  const [code,setCode]=useState("");
+  const [valueType,setValueType]=useState("select");
+  const [unit,setUnit]=useState("");
+  const [selectedCategories,setSelectedCategories]=useState<string[]>([]);
+  const [allowMultiple,setAllowMultiple]=useState(false);
+  const [compatibility,setCompatibility]=useState(false);
+  const [optionValue,setOptionValue]=useState("");
+  const [optionLabel,setOptionLabel]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+
+  function toggleCategory(category:string){
+    setSelectedCategories(current=>current.includes(category)
+      ? current.filter(item=>item!==category)
+      : [...current,category]);
+  }
+  async function submit(event:React.FormEvent){
+    event.preventDefault();setError("");setBusy(true);
+    try{
+      const endpoint=isDefinition
+        ? "/api/admin/attributes"
+        : `/api/admin/attributes/${state.definition.id}/options`;
+      const payload=isDefinition
+        ? {label,code,valueType,unit,allowMultiple,useForCompatibility:compatibility,
+          categories:selectedCategories}
+        : {value:optionValue,label:optionLabel||optionValue};
+      const response=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify(payload)});
+      const body=await response.json();
+      if(!response.ok)throw Error(body.error||"บันทึกไม่สำเร็จ");
+      await saved();close();
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:"บันทึกไม่สำเร็จ");
+    }finally{setBusy(false)}
+  }
+
+  const canSubmit=isDefinition
+    ? Boolean(label.trim()&&code.trim()&&selectedCategories.length)
+    : Boolean(optionValue.trim());
+  return <div className="admin-modal-backdrop" onMouseDown={event=>{
+    if(event.target===event.currentTarget)close();
+  }} onKeyDown={event=>{if(event.key==="Escape")close()}}>
+    <form className="admin-modal" role="dialog" aria-modal="true"
+      aria-labelledby="attribute-dialog-title" onSubmit={submit}>
+      <header className="admin-modal-head"><div>
+        <span className="eyebrow">{isDefinition?"NEW ATTRIBUTE":"NEW OPTION"}</span>
+        <h2 id="attribute-dialog-title">{isDefinition
+          ? "เพิ่มชนิดข้อมูล"
+          : `เพิ่มตัวเลือก · ${state.definition.label}`}</h2>
+        <p>{isDefinition
+          ? "กำหนดข้อมูลหนึ่งครั้ง แล้วนำไปใช้กับสินค้าและระบบตรวจความเข้ากันได้"
+          : "Value ใช้เก็บใน API ส่วนชื่อแสดงผลใช้ในหน้า Admin และหน้าร้าน"}</p>
+      </div><button className="admin-modal-close" type="button" onClick={close}
+        aria-label="ปิดหน้าต่าง">×</button></header>
+
+      <div className="admin-modal-body">{isDefinition?<>
+        <div className="modal-grid">
+          <Field label="ชื่อคุณสมบัติ"><input autoFocus value={label}
+            onChange={event=>setLabel(event.target.value)} placeholder="เช่น Socket"/></Field>
+          <Field label="Code สำหรับ API"><input value={code}
+            onChange={event=>setCode(event.target.value.toLowerCase().replace(/\s+/g,"_"))}
+            placeholder="เช่น socket"/></Field>
+          <Field label="ประเภทข้อมูล"><CustomSelect value={valueType}
+            options={[
+              {value:"select",label:"ตัวเลือก"},{value:"text",label:"ข้อความ"},
+              {value:"number",label:"ตัวเลข"},{value:"boolean",label:"ใช่ / ไม่ใช่"}
+            ]} onChange={value=>setValueType(String(value))}/></Field>
+          <Field label="หน่วย (ถ้ามี)"><input value={unit}
+            onChange={event=>setUnit(event.target.value)} placeholder="GB, W, mm"/></Field>
+        </div>
+        <div className="modal-section"><div className="modal-section-title">
+          <div><strong>ใช้กับหมวดสินค้า</strong><span>เลือกได้มากกว่าหนึ่งหมวด</span></div>
+          <small>{selectedCategories.length} หมวด</small></div>
+          <div className="category-picker">{categoryOptions.map(option=>{
+            const active=selectedCategories.includes(option.value);
+            return <button key={option.value} type="button"
+              className={active?"active":""} aria-pressed={active}
+              onClick={()=>toggleCategory(option.value)}>
+              <i>{active?"✓":"+"}</i>{option.label}
+            </button>
+          })}</div>
+        </div>
+        <div className="modal-settings">
+          <label><span><strong>เลือกได้หลายค่า</strong>
+            <small>เช่น CPU รองรับ DDR4 และ DDR5</small></span>
+            <input type="checkbox" checked={allowMultiple}
+              disabled={valueType!=="select"}
+              onChange={event=>setAllowMultiple(event.target.checked)}/><i/></label>
+          <label><span><strong>ใช้ตรวจ Compatibility</strong>
+            <small>นำค่านี้ไปใช้สร้างกฎความเข้ากันได้</small></span>
+            <input type="checkbox" checked={compatibility}
+              onChange={event=>setCompatibility(event.target.checked)}/><i/></label>
+        </div>
+      </>:<div className="modal-grid">
+        <Field label="Value สำหรับ API"><input autoFocus value={optionValue}
+          onChange={event=>setOptionValue(event.target.value.toLowerCase().replace(/\s+/g,"_"))}
+          placeholder="เช่น lga1700"/></Field>
+        <Field label="ชื่อแสดงผล"><input value={optionLabel}
+          onChange={event=>setOptionLabel(event.target.value)} placeholder="เช่น LGA1700"/></Field>
+      </div>}
+      {error&&<p className="modal-error">{error}</p>}</div>
+
+      <footer className="admin-modal-foot"><button className="secondary" type="button"
+        onClick={close}>ยกเลิก</button><button className="primary" type="submit"
+        disabled={!canSubmit||busy}>{busy?"กำลังบันทึก...":"บันทึกข้อมูล"}</button></footer>
+    </form>
+  </div>
+}
+
 function Attributes({defs,opts,maps,reload}:{defs:Def[];opts:Opt[];maps:MapRow[];reload:()=>Promise<void>}){
-  async function addDef(){const label=prompt("ชื่อคุณสมบัติ เช่น Socket");if(!label)return;
-    const code=prompt("รหัส เช่น socket");if(!code)return;
-    const categories=prompt("หมวดหมู่ คั่นด้วย comma","cpu,motherboard")?.split(",")||[];
-    await fetch("/api/admin/attributes",{method:"POST",headers:{"content-type":"application/json"},
-      body:JSON.stringify({label,code,categories,valueType:"select",useForCompatibility:true})});await reload()}
-  async function addOption(d:Def){const value=prompt(`เพิ่มตัวเลือกให้ ${d.label}`);if(!value)return;
-    await fetch(`/api/admin/attributes/${d.id}/options`,{method:"POST",headers:{"content-type":"application/json"},
-      body:JSON.stringify({value,label:value})});await reload()}
+  const [dialog,setDialog]=useState<AttributeDialogState|null>(null);
   return <section><div className="section-bar"><p>ใช้ข้อมูลชุดเดียวทั้งการแสดงผลและแมปการรองรับ</p>
-    <button className="primary" onClick={addDef}>+ เพิ่มคุณสมบัติ</button></div>
+    <button className="primary" onClick={()=>setDialog({kind:"definition"})}>+ เพิ่มคุณสมบัติ</button></div>
     <div className="card-grid">{defs.map(d=><article className="attribute-card" key={d.id}>
       <span className="type">{d.value_type}</span><h3>{d.label}</h3><code>{d.code}</code>
       <p>{maps.filter(m=>m.attribute_id===d.id).map(m=>m.category).join(" · ")}</p>
       {d.value_type==="select"&&<div className="chips">{opts.filter(o=>o.attribute_id===d.id)
-        .map(o=><span key={o.id}>{o.label}</span>)}<button onClick={()=>addOption(d)}>+ เพิ่มตัวเลือก</button></div>}
+        .map(o=><span key={o.id}>{o.label}</span>)}<button
+          onClick={()=>setDialog({kind:"option",definition:d})}>+ เพิ่มตัวเลือก</button></div>}
     </article>)}</div>
+    {dialog&&<AttributeDialog state={dialog} close={()=>setDialog(null)} saved={reload}/>}
   </section>
 }

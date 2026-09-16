@@ -14,6 +14,10 @@ test("ships the BuildFit landing page and admin console",async()=>{
   assert.match(admin,/เพิ่มสินค้า/);
   assert.match(admin,/dropzone/);
   assert.match(admin,/เพิ่มตัวเลือก/);
+  assert.match(admin,/เพิ่มชนิดข้อมูล/);
+  assert.match(admin,/Code สำหรับ API/);
+  assert.match(admin,/ใช้กับหมวดสินค้า/);
+  assert.doesNotMatch(admin,/\bprompt\s*\(/);
 });
 
 test("ships public and protected API routes",async()=>{
