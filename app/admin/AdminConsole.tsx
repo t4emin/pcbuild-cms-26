@@ -396,6 +396,9 @@ function AccountDialog({user,close}:{user:CmsUser;close:()=>void}){
   const [currentPassword,setCurrentPassword]=useState("");
   const [newPassword,setNewPassword]=useState("");
   const [confirmPassword,setConfirmPassword]=useState("");
+  const [showCurrentPassword,setShowCurrentPassword]=useState(false);
+  const [showNewPassword,setShowNewPassword]=useState(false);
+  const [showConfirmPassword,setShowConfirmPassword]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   async function submit(event:React.FormEvent){
@@ -423,14 +426,33 @@ function AccountDialog({user,close}:{user:CmsUser;close:()=>void}){
     </div><button type="button" className="admin-modal-close" disabled={busy}
       onClick={close}>×</button></header>
     <div className="admin-modal-body account-fields">
-      <Field label="รหัสผ่านปัจจุบัน"><input autoFocus type="password"
-        autoComplete="current-password" value={currentPassword}
-        onChange={event=>setCurrentPassword(event.target.value)} required/></Field>
-      <Field label="รหัสผ่านใหม่"><input type="password" autoComplete="new-password"
+      <div className="password-field"><input autoFocus aria-label="Current password"
+        type={showCurrentPassword?"text":"password"} autoComplete="current-password"
+        value={currentPassword} onChange={event=>setCurrentPassword(event.target.value)}
+        placeholder="Current password" required/>
+        <button type="button" aria-label={showCurrentPassword?"ซ่อนรหัสผ่านปัจจุบัน":"แสดงรหัสผ่านปัจจุบัน"}
+          aria-pressed={showCurrentPassword} onClick={()=>setShowCurrentPassword(value=>!value)}>
+          {showCurrentPassword?"ซ่อน":"แสดง"}
+        </button>
+      </div>
+      <div className="password-field"><input aria-label="New password"
+        type={showNewPassword?"text":"password"} autoComplete="new-password"
         value={newPassword} onChange={event=>setNewPassword(event.target.value)}
-        placeholder="อย่างน้อย 10 ตัวอักษร" required/></Field>
-      <Field label="ยืนยันรหัสผ่านใหม่"><input type="password" autoComplete="new-password"
-        value={confirmPassword} onChange={event=>setConfirmPassword(event.target.value)} required/></Field>
+        placeholder="New password" required/>
+        <button type="button" aria-label={showNewPassword?"ซ่อนรหัสผ่านใหม่":"แสดงรหัสผ่านใหม่"}
+          aria-pressed={showNewPassword} onClick={()=>setShowNewPassword(value=>!value)}>
+          {showNewPassword?"ซ่อน":"แสดง"}
+        </button>
+      </div>
+      <div className="password-field"><input aria-label="Confirm password"
+        type={showConfirmPassword?"text":"password"} autoComplete="new-password"
+        value={confirmPassword} onChange={event=>setConfirmPassword(event.target.value)}
+        placeholder="Confirm password" required/>
+        <button type="button" aria-label={showConfirmPassword?"ซ่อนรหัสผ่านยืนยัน":"แสดงรหัสผ่านยืนยัน"}
+          aria-pressed={showConfirmPassword} onClick={()=>setShowConfirmPassword(value=>!value)}>
+          {showConfirmPassword?"ซ่อน":"แสดง"}
+        </button>
+      </div>
       {error&&<p className="modal-error">{error}</p>}
     </div>
     <footer className="admin-modal-foot"><button type="button" className="secondary"
