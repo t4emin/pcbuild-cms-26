@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element -- admin previews include private R2 URLs */
 "use client";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import type { CmsUser } from "../auth";
 
 type Product = {
   id:string; slug:string; category:string; brand:string; model:string; title:string;
@@ -23,7 +24,39 @@ const blank:Product={
   performanceScore:0,status:"draft"
 };
 
-export default function AdminConsole(){
+async function cmsFetch(input:RequestInfo|URL,init?:RequestInit){
+  const response=await fetch(input,init);
+  if(response.status===401){
+    window.location.assign("/login");
+    throw new Error("Session expired");
+  }
+  return response;
+}
+
+function useBodyScrollLock(){
+  useEffect(()=>{
+    const body=document.body;
+    const scrollY=window.scrollY;
+    const scrollbarWidth=window.innerWidth-document.documentElement.clientWidth;
+    const previous={
+      overflow:body.style.overflow,position:body.style.position,top:body.style.top,
+      width:body.style.width,paddingRight:body.style.paddingRight
+    };
+    body.style.overflow="hidden";body.style.position="fixed";
+    body.style.top=`-${scrollY}px`;body.style.width="100%";
+    if(scrollbarWidth>0){
+      const paddingRight=Number.parseFloat(getComputedStyle(body).paddingRight)||0;
+      body.style.paddingRight=`${paddingRight+scrollbarWidth}px`;
+    }
+    return()=>{
+      body.style.overflow=previous.overflow;body.style.position=previous.position;
+      body.style.top=previous.top;body.style.width=previous.width;
+      body.style.paddingRight=previous.paddingRight;window.scrollTo(0,scrollY);
+    };
+  },[]);
+}
+
+export default function AdminConsole({currentUser}:{currentUser:CmsUser}){
   const [tab,setTab]=useState("products");
   const [products,setProducts]=useState<Product[]>([]);
   const [defs,setDefs]=useState<Def[]>([]);
@@ -31,12 +64,13 @@ export default function AdminConsole(){
   const [maps,setMaps]=useState<MapRow[]>([]);
   const [rules,setRules]=useState<Record<string,string>[]>([]);
   const [editing,setEditing]=useState<Product|null>(null);
+  const [accountOpen,setAccountOpen]=useState(false);
   const [query,setQuery]=useState("");
   const load=useCallback(async()=>{
     const [p,a,r]=await Promise.all([
-      fetch("/api/admin/products").then(x=>x.json()),
-      fetch("/api/admin/attributes").then(x=>x.json()),
-      fetch("/api/admin/rules").then(x=>x.json())
+      cmsFetch("/api/admin/products").then(x=>x.json()),
+      cmsFetch("/api/admin/attributes").then(x=>x.json()),
+      cmsFetch("/api/admin/rules").then(x=>x.json())
     ]);
     setProducts(p.data||[]); setDefs(a.data?.definitions||[]);
     setOpts(a.data?.options||[]); setMaps(a.data?.categoryAttributes||[]);
@@ -44,7 +78,7 @@ export default function AdminConsole(){
   },[]);
   useEffect(()=>{const timer=setTimeout(()=>void load(),0);return()=>clearTimeout(timer)},[load]);
   async function save(p:Product){
-    const res=await fetch(p.id?`/api/admin/products/${p.id}`:"/api/admin/products",{
+    const res=await cmsFetch(p.id?`/api/admin/products/${p.id}`:"/api/admin/products",{
       method:p.id?"PATCH":"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify(p)
     });
@@ -54,18 +88,31 @@ export default function AdminConsole(){
   }
   const list=products.filter(p=>(p.title+p.brand+p.model).toLowerCase().includes(query.toLowerCase()));
   const labels:Record<string,string>={
-    products:"คลังสินค้า",attributes:"ชนิดข้อมูล",rules:"Compatibility engine",api:"Public API"
+    products:"คลังสินค้า",attributes:"ชนิดข้อมูล",rules:"Compatibility engine",
+    users:"ผู้ใช้งาน",api:"Public API"
   };
+  const navigation=[
+    ["products","◫","สินค้า"],["attributes","⌘","คุณสมบัติ"],
+    ["rules","⇄","กฎความเข้ากัน"],
+    ...(currentUser.isOwner?[["users","◎","ผู้ใช้งาน"]]:[]),
+    ["api","{}","API"]
+  ];
   return <div className="admin-shell">
     <aside className="sidebar">
       <div className="brandmark"><b>B</b><div>BuildFit<small>DATA CONSOLE</small></div></div>
       <nav>
-        {[["products","◫","สินค้า"],["attributes","⌘","คุณสมบัติ"],["rules","⇄","กฎความเข้ากัน"],["api","{}","API"]].map(x=>
+        {navigation.map(x=>
           <button key={x[0]} className={tab===x[0]?"active":""} onClick={()=>setTab(x[0])}>
             <span>{x[1]}</span>{x[2]}
           </button>)}
       </nav>
-      <div className="sidebar-foot"><i/>API Online<small>D1 + R2 ready</small></div>
+      <div className="sidebar-account"><span>{currentUser.username.slice(0,1).toUpperCase()}</span>
+        <div><b>{currentUser.username}</b><small>{currentUser.isOwner?"บัญชีหลัก":"อนุมัติแล้ว"}</small></div>
+        <button aria-label="ตั้งค่าบัญชี" title="ตั้งค่าบัญชี" onClick={()=>setAccountOpen(true)}>⚙</button>
+        <button aria-label="ออกจากระบบ" title="ออกจากระบบ" onClick={async()=>{
+          await fetch("/api/auth/logout",{method:"POST"});window.location.assign("/login");
+        }}>↗</button>
+      </div>
     </aside>
     <main className="workspace">
       <header><div><span className="eyebrow">ADMIN CONSOLE</span><h1>{labels[tab]}</h1></div>
@@ -85,7 +132,7 @@ export default function AdminConsole(){
           <span><label className={`status ${p.status}`}>{p.status==="published"?"เผยแพร่":"ฉบับร่าง"}</label></span>
           <span className="row-actions"><button onClick={()=>setEditing({...p})}>แก้ไข</button>
             <button onClick={async()=>{if(confirm("ลบสินค้านี้?")){
-              await fetch(`/api/admin/products/${p.id}`,{method:"DELETE"});await load()
+              await cmsFetch(`/api/admin/products/${p.id}`,{method:"DELETE"});await load()
             }}}>ลบ</button></span>
         </div>)}</div>
       </section>}
@@ -94,6 +141,7 @@ export default function AdminConsole(){
         <div className="rules-list">{rules.map(r=><article key={r.id}>
           <span>{r.severity}</span><div><b>{r.left_category}.{r.left_attribute_code} {r.operator} {r.right_category}.{r.right_attribute_code}</b>
           <p>{r.message}</p></div></article>)}</div></section>}
+      {tab==="users"&&currentUser.isOwner&&<UserManager currentUser={currentUser}/>}
       {tab==="api"&&<section className="api-docs"><p>เปิด CORS พร้อมให้ frontend เรียกใช้</p>
         {["GET /api/v1/products?category=cpu&sort=price_asc","GET /api/v1/products/:slug",
           "GET /api/v1/schema","POST /api/v1/compatibility/check","GET /api/v1/images/:key"].map(x=>
@@ -102,6 +150,7 @@ export default function AdminConsole(){
     </main>
     {editing&&<Editor product={editing} defs={defs} opts={opts} maps={maps}
       close={()=>setEditing(null)} save={save}/>}
+    {accountOpen&&<AccountDialog user={currentUser} close={()=>setAccountOpen(false)}/>}
   </div>
 }
 
@@ -109,6 +158,7 @@ function Editor({product:initial,defs,opts,maps,close,save}:{
   product:Product;defs:Def[];opts:Opt[];maps:MapRow[];
   close:()=>void;save:(p:Product)=>Promise<void>
 }){
+  useBodyScrollLock();
   const [p,setP]=useState(initial),[busy,setBusy]=useState(false);
   const fileRef=useRef<HTMLInputElement>(null);
   const active=useMemo(()=>maps.filter(m=>m.category===p.category)
@@ -119,7 +169,7 @@ function Editor({product:initial,defs,opts,maps,close,save}:{
     setBusy(true);
     try{for(const file of Array.from(files)){
       const data=new FormData();data.append("file",file);
-      const res=await fetch("/api/admin/uploads",{method:"POST",body:data});
+      const res=await cmsFetch("/api/admin/uploads",{method:"POST",body:data});
       const json=await res.json();if(!res.ok)throw Error(json.error);
       setP(old=>({...old,images:[...old.images,json.data.url]}));
     }}catch(e){alert(e instanceof Error?e.message:"Upload failed")}finally{setBusy(false)}
@@ -274,11 +324,156 @@ function Field({label,wide,children}:{label:string;wide?:boolean;children:React.
   return <label className={wide?"field wide":"field"}><span>{label}</span>{children}</label>
 }
 
+function AccountDialog({user,close}:{user:CmsUser;close:()=>void}){
+  useBodyScrollLock();
+  const [currentPassword,setCurrentPassword]=useState("");
+  const [newPassword,setNewPassword]=useState("");
+  const [confirmPassword,setConfirmPassword]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  async function submit(event:React.FormEvent){
+    event.preventDefault();setError("");
+    if(newPassword!==confirmPassword){setError("ยืนยันรหัสผ่านไม่ตรงกัน");return}
+    setBusy(true);
+    try{
+      const response=await cmsFetch("/api/auth/change-password",{
+        method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({currentPassword,newPassword})
+      });
+      const body=await response.json();
+      if(!response.ok)throw Error(body.error||"เปลี่ยนรหัสผ่านไม่สำเร็จ");
+      window.location.assign("/login");
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:"เปลี่ยนรหัสผ่านไม่สำเร็จ");
+      setBusy(false);
+    }
+  }
+  return <div className="admin-modal-backdrop"><form className="admin-modal account-modal"
+    role="dialog" aria-modal="true" aria-labelledby="account-title" onSubmit={submit}>
+    <header className="admin-modal-head"><div><span className="eyebrow">ACCOUNT SECURITY</span>
+      <h2 id="account-title">{user.username}</h2>
+      <p>เมื่อเปลี่ยนรหัสผ่าน ระบบจะออกจากระบบทุกอุปกรณ์โดยอัตโนมัติ</p>
+    </div><button type="button" className="admin-modal-close" disabled={busy}
+      onClick={close}>×</button></header>
+    <div className="admin-modal-body account-fields">
+      <Field label="รหัสผ่านปัจจุบัน"><input autoFocus type="password"
+        autoComplete="current-password" value={currentPassword}
+        onChange={event=>setCurrentPassword(event.target.value)} required/></Field>
+      <Field label="รหัสผ่านใหม่"><input type="password" autoComplete="new-password"
+        value={newPassword} onChange={event=>setNewPassword(event.target.value)}
+        placeholder="อย่างน้อย 10 ตัวอักษร" required/></Field>
+      <Field label="ยืนยันรหัสผ่านใหม่"><input type="password" autoComplete="new-password"
+        value={confirmPassword} onChange={event=>setConfirmPassword(event.target.value)} required/></Field>
+      {error&&<p className="modal-error">{error}</p>}
+    </div>
+    <footer className="admin-modal-foot"><button type="button" className="secondary"
+      disabled={busy} onClick={close}>ยกเลิก</button><button className="primary"
+      disabled={busy}>{busy?"กำลังเปลี่ยน...":"เปลี่ยนรหัสผ่าน"}</button></footer>
+  </form></div>
+}
+
+type ManagedUser={
+  id:string;username:string;status:"pending"|"active";created_at:string;
+  approved_at:string|null;last_login_at:string|null;isOwner:boolean;
+};
+
+function UserManager({currentUser}:{currentUser:CmsUser}){
+  const [users,setUsers]=useState<ManagedUser[]>([]);
+  const [busy,setBusy]=useState("");
+  const [error,setError]=useState("");
+  const [deleting,setDeleting]=useState<ManagedUser|null>(null);
+  const load=useCallback(async()=>{
+    const response=await cmsFetch("/api/admin/users");
+    const body=await response.json();
+    if(!response.ok)throw Error(body.error||"โหลดผู้ใช้ไม่สำเร็จ");
+    setUsers(body.data||[]);
+  },[]);
+  useEffect(()=>{
+    const timer=setTimeout(()=>void load().catch(reason=>
+      setError(reason instanceof Error?reason.message:"โหลดผู้ใช้ไม่สำเร็จ")),0);
+    return()=>clearTimeout(timer);
+  },[load]);
+  async function approve(user:ManagedUser){
+    setBusy(user.id);setError("");
+    try{
+      const response=await cmsFetch(`/api/admin/users/${user.id}`,{method:"PATCH"});
+      const body=await response.json();
+      if(!response.ok)throw Error(body.error||"อนุมัติไม่สำเร็จ");
+      await load();
+    }catch(reason){setError(reason instanceof Error?reason.message:"อนุมัติไม่สำเร็จ")}
+    finally{setBusy("")}
+  }
+  async function remove(user:ManagedUser){
+    setBusy(user.id);setError("");
+    try{
+      const response=await cmsFetch(`/api/admin/users/${user.id}`,{method:"DELETE"});
+      const body=await response.json();
+      if(!response.ok)throw Error(body.error||"ลบไม่สำเร็จ");
+      setDeleting(null);await load();
+    }catch(reason){setError(reason instanceof Error?reason.message:"ลบไม่สำเร็จ")}
+    finally{setBusy("")}
+  }
+  const pending=users.filter(user=>user.status==="pending").length;
+  return <section>
+    <div className="section-bar users-summary"><div>
+      <p>เฉพาะบัญชีที่ {currentUser.username} อนุมัติเท่านั้นที่เข้าสู่ CMS ได้</p>
+      <strong>{pending} คำขอรออนุมัติ</strong>
+    </div></div>
+    {error&&<p className="modal-error">{error}</p>}
+    <div className="users-list">
+      {users.map(user=><article key={user.id}>
+        <div className="user-avatar">{user.username.slice(0,1).toUpperCase()}</div>
+        <div className="user-main"><b>{user.username}</b>
+          <small>สมัครเมื่อ {formatUserDate(user.created_at)}
+            {user.last_login_at?` · เข้าใช้ล่าสุด ${formatUserDate(user.last_login_at)}`:""}</small>
+        </div>
+        <span className={`user-state ${user.status}`}>
+          {user.isOwner?"บัญชีหลัก":user.status==="pending"?"รออนุมัติ":"ใช้งานได้"}
+        </span>
+        <div className="user-actions">
+          {user.status==="pending"&&!user.isOwner&&<button className="approve-user"
+            disabled={busy===user.id} onClick={()=>void approve(user)}>อนุมัติ</button>}
+          {!user.isOwner&&<button className="delete-user" disabled={busy===user.id}
+            onClick={()=>setDeleting(user)}>ลบ</button>}
+          {user.isOwner&&<span className="protected-user">ลบไม่ได้</span>}
+        </div>
+      </article>)}
+    </div>
+    {deleting&&<DeleteUserDialog user={deleting} busy={busy===deleting.id}
+      close={()=>setDeleting(null)} remove={()=>void remove(deleting)}/>}
+  </section>
+}
+
+function DeleteUserDialog({user,busy,close,remove}:{
+  user:ManagedUser;busy:boolean;close:()=>void;remove:()=>void
+}){
+  useBodyScrollLock();
+  return <div className="admin-modal-backdrop" onMouseDown={event=>{
+    if(event.target===event.currentTarget&&!busy)close();
+  }}>
+    <div className="admin-modal confirm-user-modal" role="alertdialog" aria-modal="true"
+      aria-labelledby="delete-user-title">
+      <header className="admin-modal-head"><div><span className="eyebrow">REMOVE ACCESS</span>
+        <h2 id="delete-user-title">ลบบัญชี {user.username}?</h2>
+        <p>ผู้ใช้นี้จะออกจากระบบและไม่สามารถเข้าถึง CMS ได้ทันที</p>
+      </div><button className="admin-modal-close" disabled={busy} onClick={close}>×</button></header>
+      <footer className="admin-modal-foot"><button className="secondary" disabled={busy}
+        onClick={close}>ยกเลิก</button><button className="danger-action" disabled={busy}
+        onClick={remove}>{busy?"กำลังลบ...":"ลบบัญชี"}</button></footer>
+    </div>
+  </div>
+}
+
+function formatUserDate(value:string){
+  return new Intl.DateTimeFormat("th-TH",{dateStyle:"medium"}).format(new Date(value));
+}
+
 type AttributeDialogState={kind:"definition"}|{kind:"option";definition:Def};
 
 function AttributeDialog({state,close,saved}:{
   state:AttributeDialogState;close:()=>void;saved:()=>Promise<void>
 }){
+  useBodyScrollLock();
   const isDefinition=state.kind==="definition";
   const [label,setLabel]=useState("");
   const [code,setCode]=useState("");
@@ -291,35 +486,6 @@ function AttributeDialog({state,close,saved}:{
   const [optionLabel,setOptionLabel]=useState("");
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
-
-  useEffect(()=>{
-    const body=document.body;
-    const scrollY=window.scrollY;
-    const scrollbarWidth=window.innerWidth-document.documentElement.clientWidth;
-    const previous={
-      overflow:body.style.overflow,
-      position:body.style.position,
-      top:body.style.top,
-      width:body.style.width,
-      paddingRight:body.style.paddingRight
-    };
-    body.style.overflow="hidden";
-    body.style.position="fixed";
-    body.style.top=`-${scrollY}px`;
-    body.style.width="100%";
-    if(scrollbarWidth>0){
-      const paddingRight=Number.parseFloat(getComputedStyle(body).paddingRight)||0;
-      body.style.paddingRight=`${paddingRight+scrollbarWidth}px`;
-    }
-    return()=>{
-      body.style.overflow=previous.overflow;
-      body.style.position=previous.position;
-      body.style.top=previous.top;
-      body.style.width=previous.width;
-      body.style.paddingRight=previous.paddingRight;
-      window.scrollTo(0,scrollY);
-    };
-  },[]);
 
   function toggleCategory(category:string){
     setSelectedCategories(current=>current.includes(category)
@@ -336,7 +502,7 @@ function AttributeDialog({state,close,saved}:{
         ? {label,code,valueType,unit,allowMultiple,useForCompatibility:compatibility,
           categories:selectedCategories}
         : {value:optionValue,label:optionLabel||optionValue};
-      const response=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},
+      const response=await cmsFetch(endpoint,{method:"POST",headers:{"content-type":"application/json"},
         body:JSON.stringify(payload)});
       const body=await response.json();
       if(!response.ok)throw Error(body.error||"บันทึกไม่สำเร็จ");

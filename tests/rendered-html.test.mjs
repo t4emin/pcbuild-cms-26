@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { access,readFile } from "node:fs/promises";
 import test from "node:test";
 import { normalizeAffiliateUrl } from "../app/url-utils.ts";
+import { hashPassword,normalizeUsername,validatePassword,validateUsername,verifyPassword } from "../app/auth-crypto.ts";
 
 test("ships the BuildFit landing page and admin console",async()=>{
-  const [page,admin,layout]=await Promise.all([
+  const [page,admin,layout,login]=await Promise.all([
     readFile(new URL("../app/page.tsx",import.meta.url),"utf8"),
     readFile(new URL("../app/admin/AdminConsole.tsx",import.meta.url),"utf8"),
-    readFile(new URL("../app/layout.tsx",import.meta.url),"utf8")
+    readFile(new URL("../app/layout.tsx",import.meta.url),"utf8"),
+    readFile(new URL("../app/login/LoginPanel.tsx",import.meta.url),"utf8")
   ]);
   assert.match(layout,/BuildFit Backend/);
   assert.match(page,/Product data that understands PC parts/);
@@ -20,6 +22,10 @@ test("ships the BuildFit landing page and admin console",async()=>{
   assert.doesNotMatch(admin,/\bprompt\s*\(/);
   assert.match(admin,/body\.style\.overflow="hidden"/);
   assert.match(admin,/body\.style\.position="fixed"/);
+  assert.match(admin,/ผู้ใช้งาน/);
+  assert.match(admin,/ลบไม่ได้/);
+  assert.match(login,/สมัครบัญชี/);
+  assert.match(login,/รอ manatdev อนุมัติบัญชี/);
 });
 
 test("ships public and protected API routes",async()=>{
@@ -30,11 +36,26 @@ test("ships public and protected API routes",async()=>{
     "../app/api/admin/products/route.ts",
     "../app/api/admin/uploads/route.ts",
     "../app/api/admin/attributes/route.ts"
+    ,"../app/api/auth/login/route.ts"
+    ,"../app/api/auth/register/route.ts"
+    ,"../app/api/auth/logout/route.ts"
+    ,"../app/api/admin/users/route.ts"
   ];
   await Promise.all(routes.map(path=>access(new URL(path,import.meta.url))));
   const compatibility=await readFile(new URL(routes[2],import.meta.url),"utf8");
   assert.match(compatibility,/score/);
   assert.match(compatibility,/contained_in/);
+});
+
+test("hashes passwords and validates account credentials",async()=>{
+  assert.equal(normalizeUsername("  Manat.Dev  "),"manat.dev");
+  assert.equal(validateUsername("valid_user"),"");
+  assert.notEqual(validateUsername("invalid user"),"");
+  assert.equal(validatePassword("0123456789"),"");
+  assert.notEqual(validatePassword("short"),"");
+  const secured=await hashPassword("correct horse battery staple",undefined,1_000);
+  assert.equal(await verifyPassword("correct horse battery staple",secured.hash,secured.salt,secured.iterations),true);
+  assert.equal(await verifyPassword("wrong password",secured.hash,secured.salt,secured.iterations),false);
 });
 
 test("normalizes pasted affiliate URLs",()=>{

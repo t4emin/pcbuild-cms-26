@@ -1,4 +1,5 @@
 import { ensureDb, getD1 } from "../db/runtime";
+import { getSessionUser,isOwner,isSameOrigin } from "./auth";
 import { normalizeAffiliateUrl } from "./url-utils";
 export { normalizeAffiliateUrl } from "./url-utils";
 
@@ -59,9 +60,13 @@ export function validateProduct(input: ProductInput) {
 }
 
 export async function requireAdminRequest(request: Request) {
-  const url = new URL(request.url);
-  if (["localhost", "127.0.0.1", "::1"].includes(url.hostname)) return true;
-  return Boolean(request.headers.get("oai-authenticated-user-email"));
+  if(request.method!=="GET"&&!isSameOrigin(request))return false;
+  return Boolean(await getSessionUser(request));
+}
+
+export async function requireOwnerRequest(request:Request){
+  if(request.method!=="GET"&&!isSameOrigin(request))return false;
+  return isOwner(await getSessionUser(request));
 }
 
 export async function getProductRows(where = "", bindings: unknown[] = []) {

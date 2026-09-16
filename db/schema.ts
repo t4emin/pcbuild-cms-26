@@ -46,3 +46,30 @@ export const compatibilityRules = sqliteTable("compatibility_rules", {
 export const imageObjects = sqliteTable("image_objects", {
   key: text("key").primaryKey(), filename: text("filename").notNull(), contentType: text("content_type").notNull(), size: integer("size").notNull(), createdAt: text("created_at").notNull(),
 });
+
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
+  username: text("username").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  passwordSalt: text("password_salt").notNull(),
+  passwordIterations: integer("password_iterations").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: text("created_at").notNull(),
+  approvedAt: text("approved_at"),
+  approvedBy: text("approved_by"),
+  lastLoginAt: text("last_login_at"),
+}, (table) => [uniqueIndex("users_username_idx").on(table.username)]);
+
+export const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const loginAttempts = sqliteTable("login_attempts", {
+  username: text("username").primaryKey(),
+  failures: integer("failures").notNull().default(0),
+  windowStartedAt: text("window_started_at").notNull(),
+  lockedUntil: text("locked_until"),
+});

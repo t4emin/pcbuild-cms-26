@@ -1,0 +1,69 @@
+.sidebar-account{
+  margin-top:auto;padding:16px 5px 0;display:flex;align-items:center;gap:8px;
+  border-top:1px solid #333630
+}
+.sidebar-account>span{
+  width:32px;height:32px;display:grid;place-items:center;flex:0 0 auto;
+  color:#192019;background:var(--lime);border-radius:9px;font-weight:900
+}
+.sidebar-account>div{min-width:0;flex:1}
+.sidebar-account b,.sidebar-account small{display:block;overflow:hidden;text-overflow:ellipsis}
+.sidebar-account b{font-size:11px}
+.sidebar-account small{margin-top:3px;color:#777e73;font-size:8px}
+.sidebar-account button{
+  width:27px;height:27px;padding:0;display:grid;place-items:center;
+  color:#90968b;background:transparent;border:0;border-radius:7px
+}
+.sidebar-account button:hover{color:white;background:#30332e}
+
+.users-summary>div{display:flex;align-items:center;gap:12px}
+.users-summary strong{
+  padding:6px 9px;color:#77571f;background:#f6eedc;
+  border-radius:99px;font-size:10px
+}
+.users-list{display:grid;gap:8px}
+.users-list article{
+  min-height:76px;padding:14px 16px;display:grid;
+  grid-template-columns:42px minmax(180px,1fr) 110px 160px;
+  align-items:center;gap:13px;background:white;
+  border:1px solid var(--line);border-radius:12px
+}
+.user-avatar{
+  width:38px;height:38px;display:grid;place-items:center;color:#fff;
+  background:#354238;border-radius:10px;font-weight:800
+}
+.user-main b,.user-main small{display:block}
+.user-main b{font-size:13px}
+.user-main small{margin-top:5px;color:var(--muted);font-size:9px}
+.user-state{
+  justify-self:start;padding:6px 9px;border-radius:99px;
+  font-size:9px;font-weight:800
+}
+.user-state.pending{color:#815f24;background:#f7efd9}
+.user-state.active{color:#23613c;background:#e8f3e9}
+.user-actions{display:flex;justify-content:flex-end;gap:6px}
+.user-actions button{padding:8px 11px;border-radius:8px;font-size:10px;font-weight:700}
+.approve-user{color:white;background:var(--green);border:0}
+.delete-user{color:#9a4949;background:white;border:1px solid #ead7d7}
+.protected-user{color:#999d95;font-size:9px}
+.confirm-user-modal,.account-modal{width:min(520px,100%)}
+.danger-action{
+  padding:12px 18px;color:white;background:#a64747;
+  border:0;border-radius:10px;font-weight:700
+}
+.account-fields{display:grid;gap:15px}
+
+@media(max-width:900px){
+  .login-page{grid-template-columns:1fr}
+  .login-brand{display:none}
+  .login-panel{padding:22px}
+  .sidebar-account{margin-top:16px}
+  .users-list article{grid-template-columns:42px 1fr auto}
+  .user-actions{grid-column:2/-1;justify-content:flex-start}
+}
+@media(max-width:580px){
+  .login-card{padding:28px 22px}
+  .users-list article{grid-template-columns:38px 1fr}
+  .user-state,.user-actions{grid-column:2}
+  .users-summary>div{align-items:flex-start;flex-direction:column}
+}
