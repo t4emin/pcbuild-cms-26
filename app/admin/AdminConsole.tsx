@@ -109,9 +109,9 @@ export default function AdminConsole({currentUser}:{currentUser:CmsUser}){
       <div className="sidebar-account"><span>{currentUser.username.slice(0,1).toUpperCase()}</span>
         <div><b>{currentUser.username}</b><small>{currentUser.isOwner?"บัญชีหลัก":"อนุมัติแล้ว"}</small></div>
         <button aria-label="ตั้งค่าบัญชี" title="ตั้งค่าบัญชี" onClick={()=>setAccountOpen(true)}>⚙</button>
-        <button aria-label="ออกจากระบบ" title="ออกจากระบบ" onClick={async()=>{
+        <button className="logout-button" aria-label="ออกจากระบบ" title="ออกจากระบบ" onClick={async()=>{
           await fetch("/api/auth/logout",{method:"POST"});window.location.assign("/login");
-        }}>↗</button>
+        }}><span aria-hidden="true">↗</span> ออกจากระบบ</button>
       </div>
     </aside>
     <main className="workspace">
@@ -430,13 +430,12 @@ function UserManager({currentUser}:{currentUser:CmsUser}){
         <span className={`user-state ${user.status}`}>
           {user.isOwner?"บัญชีหลัก":user.status==="pending"?"รออนุมัติ":"ใช้งานได้"}
         </span>
-        <div className="user-actions">
+        {!user.isOwner&&<div className="user-actions">
           {user.status==="pending"&&!user.isOwner&&<button className="approve-user"
             disabled={busy===user.id} onClick={()=>void approve(user)}>อนุมัติ</button>}
           {!user.isOwner&&<button className="delete-user" disabled={busy===user.id}
             onClick={()=>setDeleting(user)}>ลบ</button>}
-          {user.isOwner&&<span className="protected-user">ลบไม่ได้</span>}
-        </div>
+        </div>}
       </article>)}
     </div>
     {deleting&&<DeleteUserDialog user={deleting} busy={busy===deleting.id}

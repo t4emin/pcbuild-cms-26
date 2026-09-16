@@ -1,5 +1,6 @@
 .sidebar-account{
-  margin-top:auto;padding:16px 5px 0;display:flex;align-items:center;gap:8px;
+  margin-top:auto;padding:16px 5px 0;display:grid;
+  grid-template-columns:32px minmax(0,1fr) 27px;align-items:center;gap:8px;
   border-top:1px solid #333630
 }
 .sidebar-account>span{
@@ -15,6 +16,12 @@
   color:#90968b;background:transparent;border:0;border-radius:7px
 }
 .sidebar-account button:hover{color:white;background:#30332e}
+.sidebar-account .logout-button{
+  grid-column:1/-1;width:100%;height:34px;margin-top:5px;display:flex;
+  align-items:center;justify-content:center;gap:7px;color:#b9beb3;
+  background:#252823;border:1px solid #343831;font-size:10px;font-weight:700
+}
+.sidebar-account .logout-button span{font-size:13px}
 
 .users-summary>div{display:flex;align-items:center;gap:12px}
 .users-summary strong{
@@ -23,9 +30,9 @@
 }
 .users-list{display:grid;gap:8px}
 .users-list article{
-  min-height:76px;padding:14px 16px;display:grid;
-  grid-template-columns:42px minmax(180px,1fr) 110px 160px;
-  align-items:center;gap:13px;background:white;
+  min-height:68px;padding:11px 13px;display:grid;
+  grid-template-columns:42px minmax(180px,1fr) auto auto;
+  align-items:center;gap:10px;background:white;
   border:1px solid var(--line);border-radius:12px
 }
 .user-avatar{
@@ -45,7 +52,6 @@
 .user-actions button{padding:8px 11px;border-radius:8px;font-size:10px;font-weight:700}
 .approve-user{color:white;background:var(--green);border:0}
 .delete-user{color:#9a4949;background:white;border:1px solid #ead7d7}
-.protected-user{color:#999d95;font-size:9px}
 .confirm-user-modal,.account-modal{width:min(520px,100%)}
 .danger-action{
   padding:12px 18px;color:white;background:#a64747;
@@ -73,7 +79,7 @@
 @media(max-width:900px){
   .login-page{grid-template-columns:1fr}
   .sidebar-account{margin-top:16px}
-  .users-list article{grid-template-columns:42px 1fr auto}
+  .users-list article{grid-template-columns:42px minmax(0,1fr) auto}
   .user-actions{grid-column:2/-1;justify-content:flex-start}
 }
 @media(max-width:580px){

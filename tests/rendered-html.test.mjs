@@ -23,7 +23,8 @@ test("ships the BuildFit landing page and admin console",async()=>{
   assert.match(admin,/body\.style\.overflow="hidden"/);
   assert.match(admin,/body\.style\.position="fixed"/);
   assert.match(admin,/ผู้ใช้งาน/);
-  assert.match(admin,/ลบไม่ได้/);
+  assert.match(admin,/ออกจากระบบ/);
+  assert.doesNotMatch(admin,/ลบไม่ได้/);
   assert.match(login,/สมัครบัญชี/);
   assert.match(login,/BuildFit/);
   assert.doesNotMatch(login,/พื้นที่จัดการข้อมูล/);
