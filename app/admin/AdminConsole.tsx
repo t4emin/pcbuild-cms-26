@@ -671,7 +671,7 @@ type AttributeDialogState=
   |{kind:"definition";definition?:Def}
   |{kind:"option";definition:Def;option?:Opt};
 
-function AttributeDialog({state,close,saved}:{
+function AttributeDialog({state,close,saved,maps}:{
   state:AttributeDialogState;close:()=>void;saved:()=>Promise<void>;maps:MapRow[]
 }){
   useBodyScrollLock();
