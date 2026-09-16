@@ -25,7 +25,8 @@ test("ships the BuildFit landing page and admin console",async()=>{
   assert.match(admin,/ผู้ใช้งาน/);
   assert.match(admin,/ลบไม่ได้/);
   assert.match(login,/สมัครบัญชี/);
-  assert.match(login,/รอ manatdev อนุมัติบัญชี/);
+  assert.match(login,/BuildFit/);
+  assert.doesNotMatch(login,/พื้นที่จัดการข้อมูล/);
 });
 
 test("ships public and protected API routes",async()=>{

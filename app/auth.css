@@ -53,16 +53,31 @@
 }
 .account-fields{display:grid;gap:15px}
 
+.login-page.simple-login{
+  min-height:100vh;padding:24px;display:grid;place-items:center;
+  grid-template-columns:1fr;background:var(--green)
+}
+.simple-login .login-panel{min-height:auto;width:100%;padding:0;background:transparent}
+.simple-login .login-card{width:min(410px,100%);padding:34px;border:0;border-radius:20px;box-shadow:0 28px 80px #0b231a55}
+.simple-login .login-card-head{display:flex;align-items:center;justify-content:center;gap:10px}
+.simple-login .login-card-head>span{
+  width:34px;height:34px;display:grid;place-items:center;color:#172018;
+  background:var(--lime);border-radius:9px;font-weight:900
+}
+.simple-login .login-card-head b,.simple-login .login-card-head small{display:block}
+.simple-login .login-card-head b{font-size:14px;line-height:1}
+.simple-login .login-card-head small{margin-top:4px;color:#93988f;font-size:7px;letter-spacing:.17em}
+.simple-login .login-card h2{margin:26px 0 0;text-align:center;font-size:25px}
+.simple-login .auth-switch{margin-top:22px}
+
 @media(max-width:900px){
   .login-page{grid-template-columns:1fr}
-  .login-brand{display:none}
-  .login-panel{padding:22px}
   .sidebar-account{margin-top:16px}
   .users-list article{grid-template-columns:42px 1fr auto}
   .user-actions{grid-column:2/-1;justify-content:flex-start}
 }
 @media(max-width:580px){
-  .login-card{padding:28px 22px}
+  .simple-login .login-card{padding:28px 22px}
   .users-list article{grid-template-columns:38px 1fr}
   .user-state,.user-actions{grid-column:2}
   .users-summary>div{align-items:flex-start;flex-direction:column}

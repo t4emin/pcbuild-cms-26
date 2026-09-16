@@ -35,9 +35,8 @@ export default function LoginPanel(){
   }
   return <section className="login-panel">
     <div className="login-card">
-      <span className="eyebrow">{mode==="login"?"WELCOME BACK":"REQUEST ACCESS"}</span>
-      <h2>{mode==="login"?"เข้าสู่ระบบ CMS":"สมัครบัญชีใหม่"}</h2>
-      <p>{mode==="login"?"ใช้บัญชีที่ได้รับอนุมัติเพื่อจัดการข้อมูล":"บัญชีใหม่จะใช้งานได้หลังจาก manatdev กดอนุมัติ"}</p>
+      <div className="login-card-head"><span>B</span><div><b>BuildFit</b><small>DATA CONSOLE</small></div></div>
+      <h2>{mode==="login"?"เข้าสู่ระบบ":"สมัครบัญชี"}</h2>
       <div className="auth-switch">
         <button type="button" className={mode==="login"?"active":""} onClick={()=>switchMode("login")}>เข้าสู่ระบบ</button>
         <button type="button" className={mode==="register"?"active":""} onClick={()=>switchMode("register")}>สมัครบัญชี</button>
@@ -59,7 +58,6 @@ export default function LoginPanel(){
           {busy?"กรุณารอสักครู่...":mode==="login"?"เข้าสู่ระบบ":"ส่งคำขอใช้งาน"}
         </button>
       </form>
-      <small className="auth-note">ระบบจะล็อกชั่วคราวเมื่อกรอกรหัสผ่านผิดติดต่อกันหลายครั้ง</small>
     </div>
   </section>
 }
