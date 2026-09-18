@@ -14,7 +14,7 @@ type Def={
   unit?:string;use_for_compatibility?:number;
 };
 type Opt={id:string;attribute_id:string;value:string;label:string};
-type MapRow={category:string;attribute_id:string;sort_order:number};
+type MapRow={category:string;attribute_id:string;required:number;sort_order:number};
 type Rule={
   id:string;left_category:string;left_attribute_code:string;operator:string;
   right_category:string;right_attribute_code:string;severity:string;message:string;active:number;
@@ -33,6 +33,7 @@ const blank:Product={
   description:"",price:0,affiliateUrl:"",shopName:"",images:[],attributes:{},
   performanceScore:0,status:"draft"
 };
+const requiredMessage="กรุณากรอกข้อมูล";
 
 async function cmsFetch(input:RequestInfo|URL,init?:RequestInit){
   const response=await fetch(input,init);
@@ -173,12 +174,40 @@ function Editor({product:initial,defs,opts,maps,close,save}:{
   useBodyScrollLock();
   const [p,setP]=useState(initial),[busy,setBusy]=useState(false);
   const [errors,setErrors]=useState<string[]>([]);
+  const [fieldErrors,setFieldErrors]=useState<Record<string,string>>({});
   const [importText,setImportText]=useState("");
   const fileRef=useRef<HTMLInputElement>(null);
+  const formBodyRef=useRef<HTMLDivElement>(null);
   const active=useMemo(()=>maps.filter(m=>m.category===p.category)
-    .sort((a,b)=>a.sort_order-b.sort_order).map(m=>defs.find(d=>d.id===m.attribute_id))
-    .filter(Boolean) as Def[],[p.category,defs,maps]);
-  const set=(key:keyof Product,value:unknown)=>setP(old=>({...old,[key]:value}));
+    .sort((a,b)=>a.sort_order-b.sort_order)
+    .map(map=>({map,def:defs.find(d=>d.id===map.attribute_id)}))
+    .filter((item):item is {map:MapRow;def:Def}=>Boolean(item.def)),[p.category,defs,maps]);
+  const set=(key:keyof Product,value:unknown)=>{
+    setP(old=>({...old,[key]:value}));
+    setFieldErrors(current=>{
+      if(!current[key])return current;
+      const next={...current};delete next[key];return next;
+    });
+  };
+  function setAttribute(code:string,value:unknown){
+    setP(old=>({...old,attributes:{...old.attributes,[code]:value}}));
+    setFieldErrors(current=>{
+      const key=`attr:${code}`;
+      if(!current[key])return current;
+      const next={...current};delete next[key];return next;
+    });
+  }
+  function missing(value:unknown){
+    if(Array.isArray(value))return value.length===0;
+    return value===undefined||value===null||String(value).trim()==="";
+  }
+  function scrollToFirstError(){
+    requestAnimationFrame(()=>{
+      const first=formBodyRef.current?.querySelector<HTMLElement>(".field.invalid");
+      first?.scrollIntoView({behavior:"smooth",block:"center"});
+      first?.querySelector<HTMLElement>("input,textarea,button")?.focus({preventScroll:true});
+    });
+  }
   function importDetails(){
     const lines=importText.split("\n").map(line=>line.trim()).filter(Boolean);
     if(!lines.length)return;
@@ -201,19 +230,26 @@ function Editor({product:initial,defs,opts,maps,close,save}:{
     setP(next);setImportText("");
   }
   function validateLocal(){
-    const next:string[]=[];
-    if(!p.title.trim())next.push("ใส่ชื่อสินค้า");
-    if(!p.brand.trim())next.push("ใส่แบรนด์");
-    if(!p.model.trim())next.push("ใส่รุ่น");
-    if(Number(p.price)<0||!Number.isFinite(Number(p.price)))next.push("ราคาต้องเป็นตัวเลข 0 ขึ้นไป");
+    const next:Record<string,string>={};
+    if(!p.brand.trim())next.brand=requiredMessage;
+    if(!p.model.trim())next.model=requiredMessage;
+    if(!p.title.trim())next.title=requiredMessage;
+    if(Number(p.price)<0||!Number.isFinite(Number(p.price)))next.price="ราคาต้องเป็นตัวเลข 0 ขึ้นไป";
     if(p.affiliateUrl.trim()){
       try{
         const url=new URL(p.affiliateUrl.trim().replace(/^hhttps:\/\//i,"https://"));
-        if(url.protocol!=="https:")next.push("Affiliate URL ต้องเป็น https");
-      }catch{next.push("Affiliate URL ไม่ถูกต้อง")}
+        if(url.protocol!=="https:")next.affiliateUrl="Affiliate URL ต้องเป็น https";
+      }catch{next.affiliateUrl="Affiliate URL ไม่ถูกต้อง"}
     }
-    setErrors(next);
-    return next.length===0;
+    for(const {map,def} of active){
+      if(Number(map.required)!==0&&missing(p.attributes[def.code])){
+        next[`attr:${def.code}`]=requiredMessage;
+      }
+    }
+    setFieldErrors(next);
+    setErrors([]);
+    if(Object.keys(next).length)scrollToFirstError();
+    return Object.keys(next).length===0;
   }
   function moveImage(from:number,to:number){
     if(to<0||to>=p.images.length)return;
@@ -234,20 +270,25 @@ function Editor({product:initial,defs,opts,maps,close,save}:{
   return <div className="scrim"><div className="drawer">
     <div className="drawer-head"><div><span className="eyebrow">{p.id?"EDIT PRODUCT":"NEW PRODUCT"}</span>
       <h2>{p.title||"เพิ่มสินค้าใหม่"}</h2></div><button className="close" onClick={close}>×</button></div>
-    <div className="form-body"><h3>ข้อมูลหลัก</h3><div className="grid">
+    <div className="form-body" ref={formBodyRef}><h3>ข้อมูลหลัก</h3><div className="grid">
       <Field label="หมวดหมู่"><CustomSelect value={p.category} options={categoryOptions}
         onChange={value=>set("category",value)}/></Field>
       <Field label="สถานะ"><CustomSelect value={p.status} options={statusOptions}
         onChange={value=>set("status",value)}/></Field>
-      <Field label="แบรนด์"><input value={p.brand} onChange={e=>set("brand",e.target.value)}/></Field>
-      <Field label="รุ่น"><input value={p.model} onChange={e=>set("model",e.target.value)}/></Field>
-      <Field wide label="ชื่อสินค้า"><input value={p.title} onChange={e=>set("title",e.target.value)}/></Field>
+      <Field label="แบรนด์" required error={fieldErrors.brand}><input value={p.brand}
+        onChange={e=>set("brand",e.target.value)}/></Field>
+      <Field label="รุ่น" required error={fieldErrors.model}><input value={p.model}
+        onChange={e=>set("model",e.target.value)}/></Field>
+      <Field wide label="ชื่อสินค้า" required error={fieldErrors.title}><input value={p.title}
+        onChange={e=>set("title",e.target.value)}/></Field>
       <Field wide label="คำอธิบายสั้น"><input value={p.shortDescription} onChange={e=>set("shortDescription",e.target.value)}/></Field>
       <Field wide label="รายละเอียด"><textarea rows={5} value={p.description} onChange={e=>set("description",e.target.value)}/></Field>
     </div><h3>ร้านค้า Affiliate</h3><div className="grid">
       <Field label="ชื่อร้าน"><input value={p.shopName} onChange={e=>set("shopName",e.target.value)}/></Field>
-      <Field label="ราคา (บาท)"><input type="number" value={p.price} onChange={e=>set("price",+e.target.value)}/></Field>
-      <Field wide label="Affiliate URL"><input value={p.affiliateUrl} onChange={e=>set("affiliateUrl",e.target.value)} placeholder="https://..."/></Field>
+      <Field label="ราคา (บาท)" error={fieldErrors.price}><input type="number" value={p.price}
+        onChange={e=>set("price",+e.target.value)}/></Field>
+      <Field wide label="Affiliate URL" error={fieldErrors.affiliateUrl}><input value={p.affiliateUrl}
+        onChange={e=>set("affiliateUrl",e.target.value)} placeholder="https://..."/></Field>
     </div><h3>รูปสินค้า</h3>
     <div className="dropzone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()}
       onDrop={e=>{e.preventDefault();void upload(e.dataTransfer.files)}}>
@@ -266,9 +307,10 @@ function Editor({product:initial,defs,opts,maps,close,save}:{
         <button type="button" onClick={()=>set("images",p.images.filter((_,n)=>n!==i))}>×</button>
       </div>
     </div>)}</div><h3>คุณสมบัติสำหรับ {p.category}</h3><div className="grid">
-      {active.map(d=><Field key={d.id} label={d.label+(d.unit?` (${d.unit})`:"")}>
-        <Attribute def={d} options={opts.filter(o=>o.attribute_id===d.id)}
-          value={p.attributes[d.code]} change={v=>set("attributes",{...p.attributes,[d.code]:v})}/>
+      {active.map(({map,def})=><Field key={def.id} label={def.label+(def.unit?` (${def.unit})`:"")}
+        required={Number(map.required)!==0} error={fieldErrors[`attr:${def.code}`]}>
+        <Attribute def={def} options={opts.filter(o=>o.attribute_id===def.id)}
+          value={p.attributes[def.code]} change={v=>setAttribute(def.code,v)}/>
       </Field>)}
     </div>{errors.length>0&&<div className="form-errors">{errors.map(error=><span key={error}>{error}</span>)}</div>}</div><div className="drawer-foot"><button className="secondary" onClick={close}>ยกเลิก</button>
       <button className="primary" disabled={busy} onClick={async()=>{if(!validateLocal())return;setBusy(true);try{await save(p)}
@@ -387,8 +429,13 @@ function CustomSelect({value,options,onChange,multiple=false,placeholder="เล
   </div>
 }
 
-function Field({label,wide,children}:{label:string;wide?:boolean;children:React.ReactNode}){
-  return <label className={wide?"field wide":"field"}><span>{label}</span>{children}</label>
+function Field({label,wide,required,error,children}:{
+  label:string;wide?:boolean;required?:boolean;error?:string;children:React.ReactNode
+}){
+  return <label className={`${wide?"field wide":"field"}${error?" invalid":""}`}>
+    <span>{label}{required&&<b aria-label="จำเป็นต้องกรอก">*</b>}</span>{children}
+    {error&&<small className="field-error">{error}</small>}
+  </label>
 }
 
 function AccountDialog({user,close}:{user:CmsUser;close:()=>void}){
